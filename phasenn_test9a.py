@@ -88,8 +88,8 @@ def n0_dft(n0):
     n0 = K.print_tensor(n0, "x is: ")
     # note n0 scaled by n0/P_max when represented in NN, too keep it in 0..1 range
     N=width
-    cos_term = K.cos(n0*P_max*K.cast(K.arange(0,N), dtype='float32')*np.pi/N)
-    sin_term = K.sin(-n0*P_max*K.cast(K.arange(0,N), dtype='float32')*np.pi/N)
+    cos_term = K.cos(n0*K.cast(K.arange(0,N), dtype='float32')*np.pi/N)
+    sin_term = K.sin(-n0*K.cast(K.arange(0,N), dtype='float32')*np.pi/N)
     return K.concatenate([cos_term,sin_term], axis=-1)
 
 # testing custom layer against numpy implementation
