@@ -21,9 +21,9 @@ from keras import backend as K
 
 Fs                = 8000    # sample rate
 N                 = 80      # number of time domain samples in frame
-nb_samples        = 10
+nb_samples        = 100
 nb_batch          = 2
-nb_epochs         = 1
+nb_epochs         = 11
 width             = 256
 pairs             = 2*width
 fo_min            = 50
@@ -63,42 +63,55 @@ for i in range(nb_samples):
     w,h = signal.freqz(1, [1, -2*gamma*np.cos(alpha), gamma*gamma], range(1,L[i])*Wo[i])
     
     # select n0 between 0...P-1 (it's periodic)
+    #n0[i] = r[2]*P
     n0[i] = r[2]*P
-    e = np.exp(-1j*n0[i]*range(1,L[i])*Wo[i])
+    e = np.exp(-1j*n0[i]*range(width)*np.pi/width)
     
     for m in range(1,L[i]):
         bin = int(np.round(m*Wo[i]*width/np.pi))
         mWo = bin*np.pi/width
         
         amp[i,bin] = np.log10(abs(h[m-1]))
-        phase[i,bin] = np.angle(h[m-1]*e[m-1])
+        phase[i,bin] = np.angle(h[m-1]*e[bin])
         phase_rect[i,2*bin]   = np.cos(phase[i,bin])
         phase_rect[i,2*bin+1] = np.sin(phase[i,bin])
 
         # target is freq domain version of n0 in rec coords, not cos() and sin() terms
         # are in first and second half, rather than paired, to maintain compatability
         # with the custom layer
-        e_rect[i,bin]   = e[m-1].real
-        e_rect[i,width+bin] = e[m-1].imag
+        e_rect[i,bin]       = e[bin].real
+        e_rect[i,width+bin] = e[bin].imag
                               
 # custom layer to compute a vector of DFT samples of an impulse, from
 # n0.  We know how to do this with standard signal processing so we
-# don't need to train layer
+# don't need to train layer.  However it is difficult to write signal processing
+# code in "Keras backend" language
 def n0_dft(n0):
-    n0 = K.print_tensor(n0, "x is: ")
-    # note n0 scaled by n0/P_max when represented in NN, too keep it in 0..1 range
+    n0 = K.print_tensor(n0, "n0 is: ")
+    # note input n0 scaled by n0/P_max when represented in NN, too keep it in 0..1 range
     N=width
-    cos_term = K.cos(n0*K.cast(K.arange(0,N), dtype='float32')*np.pi/N)
-    sin_term = K.sin(-n0*K.cast(K.arange(0,N), dtype='float32')*np.pi/N)
+    cos_term = K.cos( n0*P_max*K.cast(K.arange(N), dtype='float32')*np.pi/N)
+    sin_term = K.sin(-n0*P_max*K.cast(K.arange(N), dtype='float32')*np.pi/N)
     return K.concatenate([cos_term,sin_term], axis=-1)
 
 # testing custom layer against numpy implementation
+
 a = layers.Input(shape=(None,))
 custom_layer = K.Function([a], [n0_dft(a)])
-e_test = np.array(custom_layer([[[1/P_max],[2/P_max]]]))
-print(e_test)
-print(e_rect)
-print(e_test.shape)
+for i in range(10):
+  e_test = np.array(custom_layer([[[n0[i]/P_max]]]))
+  # so e_test is continuous, we just want to sample at nonzero harmonic points
+  ind = np.nonzero(e_rect[i,:])
+  err = (e_rect[i,ind] - e_test[0,0,ind])
+  # there will be a small error, as the harmonic frequencies don't map
+  # exactly to DFT bins.  This could be improved if we somehow pass Wo
+  # into our custom layer
+  print(i, n0[i], n0[i]/P_max, np.mean(err))
+  if np.mean(err) > 1E-2:
+      print(err)
+  assert(np.mean(err) < 1E-2)
+
+quit()
 #e_targ = np.exp(-1j*n0_test*np.arange(width)*np.pi/width)
 #e_targ = e_targ.reshape(1,width)
 #err_real = np.sum(np.abs(e_test[:,:width] - e_targ.real))
@@ -110,6 +123,7 @@ print(e_test.shape)
 def sparse_loss(y_true, y_pred):
     mask = K.cast( K.not_equal(y_true, 0), dtype='float32')
     n = K.sum(mask)
+    n = K.print_tensor(n, "n is: ")
     return K.sum(K.square((y_pred - y_true)*mask))/n
 
 # testing custom loss function
@@ -128,15 +142,15 @@ model.add(Lambda(n0_dft))
 model.summary()
 
 from keras import optimizers
-sgd = optimizers.SGD(lr=0.08, decay=1e-6, momentum=0.9, nesterov=True)
+sgd = optimizers.SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
 model.compile(loss=sparse_loss, optimizer=sgd)
 history = model.fit(phase_rect, e_rect, batch_size=nb_batch, epochs=nb_epochs)
 
 # measure error in rectangular coordinates over all samples
 
 target_est = model.predict(phase_rect)
-print(target_est)
-print(e_rect)
+#print(target_est)
+#print(e_rect)
 quit()
 err = e_rect - target_est
 var = np.var(err)
