@@ -86,19 +86,20 @@ for i in range(nb_samples):
 # n0.  We know how to do this with standard signal processing so we
 # don't need to train layer.  However it is difficult to write signal processing
 # code in "Keras backend" language
-def n0_dft(n0):
-    n0 = K.print_tensor(n0, "n0 is: ")
-    # note input n0 scaled by n0/P_max when represented in NN, too keep it in 0..1 range
+def n0_dft(n0_scaled):
+    #n0 = K.print_tensor(n0_scaled, "n0 is: ")
+    # note n0_scaled = n0/P_max such that n0_scaled stays betwen [0..1]
     N=width
-    cos_term = K.cos( n0*P_max*K.cast(K.arange(N), dtype='float32')*np.pi/N)
-    sin_term = K.sin(-n0*P_max*K.cast(K.arange(N), dtype='float32')*np.pi/N)
+    n0=n0_scaled*P_max
+    cos_term = K.cos( n0*K.cast(K.arange(N), dtype='float32')*np.pi/N)
+    sin_term = K.sin(-n0*K.cast(K.arange(N), dtype='float32')*np.pi/N)
     return K.concatenate([cos_term,sin_term], axis=-1)
 
 # testing custom layer against numpy implementation
 
 a = layers.Input(shape=(None,))
 custom_layer = K.Function([a], [n0_dft(a)])
-for i in range(10):
+for i in range(100):
   e_test = np.array(custom_layer([[[n0[i]/P_max]]]))
   # so e_test is continuous, we just want to sample at nonzero harmonic points
   ind = np.nonzero(e_rect[i,:])
@@ -106,10 +107,7 @@ for i in range(10):
   # there will be a small error, as the harmonic frequencies don't map
   # exactly to DFT bins.  This could be improved if we somehow pass Wo
   # into our custom layer
-  print(i, n0[i], n0[i]/P_max, np.mean(err))
-  if np.mean(err) > 1E-2:
-      print(err)
-  assert(np.mean(err) < 1E-2)
+  assert(np.mean(err) < 1E-4)
 
 quit()
 #e_targ = np.exp(-1j*n0_test*np.arange(width)*np.pi/width)
