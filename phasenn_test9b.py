@@ -10,7 +10,7 @@
 
 import numpy as np
 import sys
-from keras.layers import Dense
+from keras.layers import Dense, Lambda
 from keras import models,layers
 from keras import initializers
 import matplotlib.pyplot as plt
@@ -26,7 +26,7 @@ Fs                = 8000
 N                 = 80      # number of time domain samples in frame
 nb_samples        = 10000
 nb_batch          = 32
-nb_epochs         = 30
+nb_epochs         = 10
 width             = 256
 pairs             = 2*width
 fo_min            = 50
@@ -81,20 +81,38 @@ for i in range(nb_samples):
 
         # target is n0 in rec coords                      
         target[i] = n0[i]/P_max
-        e_rect[i,2*bin] = e[bin].real
-        e_rect[i,2*bin+1] = e[bin].imag
+        e_rect[i,bin] = e[bin].real
+        e_rect[i,width+bin] = e[bin].imag
         
+def n0_dft(n0_scaled):
+    #n0_scaled = K.print_tensor(n0_scaled, "n0_scaled is: ")
+    n0 = n0_scaled*P_max
+    #n0 = K.print_tensor(n0, "n0 is: ")
+    #note n0_scaled = n0/P_max such that n0_scaled stays betwen [0..1]
+    N=width
+    cos_term = K.cos( n0*K.cast(K.arange(N), dtype='float32')*np.pi/N)
+    sin_term = K.sin(-n0*K.cast(K.arange(N), dtype='float32')*np.pi/N)
+    return K.concatenate([cos_term,sin_term], axis=-1)
+
+# custom loss function
+def sparse_loss(y_true, y_pred):
+    mask = K.cast( K.not_equal(y_true, 0), dtype='float32')
+    #mask = K.print_tensor(mask, "mask is: ")
+    n = K.sum(mask)
+    return K.sum(K.square((y_pred - y_true)*mask))/n
+
 model = models.Sequential()
 model.add(layers.Dense(pairs, activation='relu', input_dim=pairs))
 model.add(layers.Dense(128, activation='relu'))
 model.add(layers.Dense(1))
+model.add(Lambda(n0_dft))
 model.summary()
 
 from keras import optimizers
-sgd = optimizers.SGD(lr=0.08, decay=1e-6, momentum=0.9, nesterov=True)
-model.compile(loss="mse", optimizer=sgd)
-history = model.fit(e_rect, target, batch_size=nb_batch, epochs=nb_epochs)
-
+sgd = optimizers.SGD(lr=1E-4, decay=1e-6, momentum=0.9, nesterov=True)
+model.compile(loss=sparse_loss, optimizer=sgd)
+history = model.fit(e_rect, e_rect, batch_size=nb_batch, epochs=nb_epochs)
+quit()
 # measure error in rectangular coordinates over all samples
 
 target_est = model.predict(e_rect)
