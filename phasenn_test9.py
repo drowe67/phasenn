@@ -64,7 +64,7 @@ for i in range(nb_samples):
     w,h = signal.freqz(1, [1, -2*gamma*np.cos(alpha), gamma*gamma], range(1,L[i])*Wo[i])
     
     # select n0 between 0...P-1 (it's periodic)
-    n0[i] = r[2]*P_max
+    n0[i] = r[2]*P
     e = np.exp(-1j*n0[i]*range(1,width)*np.pi/width)
     
     for m in range(1,L[i]):
