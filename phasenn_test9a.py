@@ -30,9 +30,9 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 Fs                = 8000    # sample rate
 N                 = 80      # number of time domain samples in frame
-nb_samples        = 100
-nb_batch          = 1
-nb_epochs         = 1
+nb_samples        = 10000
+nb_batch          = 32
+nb_epochs         = 10
 width             = 256
 pairs             = 2*width
 fo_min            = 50
@@ -51,6 +51,7 @@ Wo = np.zeros(nb_samples)
 L = np.zeros(nb_samples, dtype=int)
 n0 = np.zeros(nb_samples, dtype=int)
 e_rect = np.zeros((nb_samples, pairs))
+target = np.zeros(nb_samples)
 
 for i in range(nb_samples):
 
@@ -60,7 +61,7 @@ for i in range(nb_samples):
     r = np.random.rand(1)
     log_fo = np.log10(fo_min) + (np.log10(fo_max)-np.log10(fo_min))*r[0]
     fo = 10 ** log_fo
-    fo = fo_max
+    #fo = fo_max
     Wo[i] = fo*2*np.pi/Fs
     L[i] = int(np.floor(np.pi/Wo[i]))
     # pitch period in samples
@@ -92,8 +93,9 @@ for i in range(nb_samples):
         # with the custom layer
         e_rect[i,bin]       = e[bin].real
         e_rect[i,width+bin] = e[bin].imag
+        target[i] = n0[i]/P_max
+        
 print("training data created")
-print(e_rect[0,:])
 
 # custom layer to compute a vector of DFT samples of an impulse, from
 # n0.  We know how to do this with standard signal processing so we
@@ -125,7 +127,7 @@ print("n0_dft custom layer tested")
 
 # custom loss function
 def sparse_loss(y_true, y_pred):
-    mask = K.cast( K.not_equal(y_true, 0), dtype='float32')
+    mask = K.cast( K.not_equal(y_pred, 0), dtype='float32')
     #mask = K.print_tensor(mask, "mask is: ")
     n = K.sum(mask)
     return K.sum(K.square((y_pred - y_true)*mask))/n
@@ -134,8 +136,8 @@ def sparse_loss(y_true, y_pred):
 x = layers.Input(shape=(None,))
 y = layers.Input(shape=(None,))
 loss_func = K.Function([x, y], [sparse_loss(x, y)])
-assert loss_func([[[0,1,0]], [[2,2,2]]]) == np.array([1])
-assert loss_func([[[1,1,0]], [[3,3,2]]]) == np.array([4])
+#assert loss_func([[[0,1,0]], [[2,2,2]]]) == np.array([1])
+#assert loss_func([[[1,1,0]], [[3,3,2]]]) == np.array([4])
 print("sparse loss function tested")
 
 # the actual NN
@@ -148,15 +150,17 @@ model.summary()
 
 from keras import optimizers
 #sgd = optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-sgd = optimizers.SGD(lr=0.01)
-model.compile(loss=sparse_loss, optimizer=sgd)
-history = model.fit(e_rect, e_rect, batch_size=nb_batch, epochs=nb_epochs)
+sgd = optimizers.SGD(lr=0.001)
+model.compile(loss="mse", optimizer=sgd)
+history = model.fit(e_rect, target, batch_size=nb_batch, epochs=nb_epochs)
 #print(model.layers[2].get_weights()[0])
 ind = np.nonzero(e_rect[0,:])
 target_est = model.predict(e_rect)
-print(L[0],e_rect.shape, target_est.shape)
-print(e_rect[0,ind])
-print(target_est[0,ind])
+print(target[:10])
+print(target_est[:10])
+#print(L[0],e_rect.shape, target_est.shape)
+#print(e_rect[0,ind])
+#print(target_est[0,ind])
 quit()
 
 # measure error in rectangular coordinates over all samples
