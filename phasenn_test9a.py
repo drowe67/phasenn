@@ -1,11 +1,16 @@
 #!/usr/bin/python3
-# phasenn_test9.py
+# phasenn_test9a.py
 #
 # David Rowe Nov 2019
 
 # Estimate an impulse position from the phase spectra of a 2nd order system excited by an impulse
 #
-# periodic impulse train Wo at time offset n0 -> 2nd order system -> discrete phase specta -> NN -> n0
+# periodic impulse train Wo at time offset n0 ->
+# 2nd order system ->
+# discrete phase specta ->
+# NN -> single n0 output ->
+# lamba layer to generate phase spectra ->
+# spare loss function to compare at discrete points
 
 
 import numpy as np
@@ -16,19 +21,24 @@ from keras import initializers
 import matplotlib.pyplot as plt
 from scipy import signal
 from keras import backend as K
+import os
+
+# be quiet tensorflow ....
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 # constants
 
 Fs                = 8000    # sample rate
 N                 = 80      # number of time domain samples in frame
 nb_samples        = 100
-nb_batch          = 2
-nb_epochs         = 11
+nb_batch          = 1
+nb_epochs         = 1
 width             = 256
 pairs             = 2*width
 fo_min            = 50
 fo_max            = 400
 P_max             = Fs/fo_min
+gain              = 2
 
 # Generate training data
 
@@ -50,6 +60,7 @@ for i in range(nb_samples):
     r = np.random.rand(1)
     log_fo = np.log10(fo_min) + (np.log10(fo_max)-np.log10(fo_min))*r[0]
     fo = 10 ** log_fo
+    fo = fo_max
     Wo[i] = fo*2*np.pi/Fs
     L[i] = int(np.floor(np.pi/Wo[i]))
     # pitch period in samples
@@ -63,8 +74,8 @@ for i in range(nb_samples):
     w,h = signal.freqz(1, [1, -2*gamma*np.cos(alpha), gamma*gamma], range(1,L[i])*Wo[i])
     
     # select n0 between 0...P-1 (it's periodic)
-    #n0[i] = r[2]*P
     n0[i] = r[2]*P
+    n0[i] = 2
     e = np.exp(-1j*n0[i]*range(width)*np.pi/width)
     
     for m in range(1,L[i]):
@@ -81,16 +92,19 @@ for i in range(nb_samples):
         # with the custom layer
         e_rect[i,bin]       = e[bin].real
         e_rect[i,width+bin] = e[bin].imag
-                              
+print("training data created")
+print(e_rect[0,:])
+
 # custom layer to compute a vector of DFT samples of an impulse, from
 # n0.  We know how to do this with standard signal processing so we
 # don't need to train layer.  However it is difficult to write signal processing
 # code in "Keras backend" language
 def n0_dft(n0_scaled):
-    #n0 = K.print_tensor(n0_scaled, "n0 is: ")
-    # note n0_scaled = n0/P_max such that n0_scaled stays betwen [0..1]
+    n0_scaled = K.print_tensor(n0_scaled, "n0_scaled is: ")
+    n0 = n0_scaled*gain #*P_max
+    n0 = K.print_tensor(n0, "n0 is: ")
+    #note n0_scaled = n0/P_max such that n0_scaled stays betwen [0..1]
     N=width
-    n0=n0_scaled*P_max
     cos_term = K.cos( n0*K.cast(K.arange(N), dtype='float32')*np.pi/N)
     sin_term = K.sin(-n0*K.cast(K.arange(N), dtype='float32')*np.pi/N)
     return K.concatenate([cos_term,sin_term], axis=-1)
@@ -99,57 +113,57 @@ def n0_dft(n0_scaled):
 
 a = layers.Input(shape=(None,))
 custom_layer = K.Function([a], [n0_dft(a)])
-for i in range(100):
-  e_test = np.array(custom_layer([[[n0[i]/P_max]]]))
+for i in range(10):
+  e_test = np.array(custom_layer([[[n0[i]/gain]]]))
   # so e_test is continuous, we just want to sample at nonzero harmonic points
   ind = np.nonzero(e_rect[i,:])
   err = (e_rect[i,ind] - e_test[0,0,ind])
-  # there will be a small error, as the harmonic frequencies don't map
-  # exactly to DFT bins.  This could be improved if we somehow pass Wo
-  # into our custom layer
-  assert(np.mean(err) < 1E-4)
-
-quit()
-#e_targ = np.exp(-1j*n0_test*np.arange(width)*np.pi/width)
-#e_targ = e_targ.reshape(1,width)
-#err_real = np.sum(np.abs(e_test[:,:width] - e_targ.real))
-#err_imag = np.sum(np.abs(e_test[:,width:] - e_targ.imag))
-#assert(err_real < 1E-3)
-#assert(err_imag < 1E-3)
+  # there will be a small error as the GPU and Host don't always agree
+  print(i,L[i],n0[i],err.shape, np.std(err))
+  assert(np.mean(np.std(err)) < 1E-4)
+print("n0_dft custom layer tested")
 
 # custom loss function
 def sparse_loss(y_true, y_pred):
     mask = K.cast( K.not_equal(y_true, 0), dtype='float32')
+    #mask = K.print_tensor(mask, "mask is: ")
     n = K.sum(mask)
-    n = K.print_tensor(n, "n is: ")
     return K.sum(K.square((y_pred - y_true)*mask))/n
 
 # testing custom loss function
 x = layers.Input(shape=(None,))
 y = layers.Input(shape=(None,))
 loss_func = K.Function([x, y], [sparse_loss(x, y)])
-assert loss_func([[[1,1,1]], [[0,2,0]]]) == np.array([1])
-assert loss_func([[[0,1,0]], [[0,2,0]]]) == np.array([1])
+assert loss_func([[[0,1,0]], [[2,2,2]]]) == np.array([1])
+assert loss_func([[[1,1,0]], [[3,3,2]]]) == np.array([4])
+print("sparse loss function tested")
 
 # the actual NN
 model = models.Sequential()
 model.add(layers.Dense(pairs, activation='relu', input_dim=pairs))
 model.add(layers.Dense(128, activation='relu'))
-model.add(layers.Dense(1))
+model.add(layers.Dense(1, use_bias=False))
 model.add(Lambda(n0_dft))
 model.summary()
 
 from keras import optimizers
-sgd = optimizers.SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
+#sgd = optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+sgd = optimizers.SGD(lr=0.01)
 model.compile(loss=sparse_loss, optimizer=sgd)
-history = model.fit(phase_rect, e_rect, batch_size=nb_batch, epochs=nb_epochs)
+history = model.fit(e_rect, e_rect, batch_size=nb_batch, epochs=nb_epochs)
+#print(model.layers[2].get_weights()[0])
+ind = np.nonzero(e_rect[0,:])
+target_est = model.predict(e_rect)
+print(L[0],e_rect.shape, target_est.shape)
+print(e_rect[0,ind])
+print(target_est[0,ind])
+quit()
 
 # measure error in rectangular coordinates over all samples
 
 target_est = model.predict(phase_rect)
 #print(target_est)
 #print(e_rect)
-quit()
 err = e_rect - target_est
 var = np.var(err)
 std = np.std(err)
