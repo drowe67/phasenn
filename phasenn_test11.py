@@ -46,7 +46,7 @@ assert loss_func([[[0,1,0]], [[0,2,0]]]) == np.array([1])
 # constants
 
 N                 = 80      # number of time domain samples in frame
-nb_samples        = 100
+nb_samples        = 12
 nb_batch          = 32
 nb_epochs         = 10
 width             = 256
@@ -113,13 +113,14 @@ for i in range(nb_samples):
     err_min = 1E32
     P = 2*L[i]
 
- #   for test_n0 in np.arange(0,P,0.25):
- #       e = np.exp(-1j*test_n0*np.arange(1,L[i]+1)*Wo[i])
- #       err = np.dot(10**amp[i,1:L[i]+1], np.abs(np.exp(1j*phase[i,1:L[i]+1]) - e)**2)
- #       if err < err_min:
- #           err_min = err
- #           n0_est[i] = test_n0
-    n0_est[i] = n0[i]
+    for test_n0 in np.arange(0,P,0.25):
+        e = np.exp(-1j*test_n0*np.arange(1,L[i]+1)*Wo[i])
+        err = np.dot(10**amp[i,1:L[i]+1], np.abs(np.exp(1j*phase[i,1:L[i]+1]) - e)**2)
+        if err < err_min:
+            err_min = err
+            n0_est[i] = test_n0
+    print(n0[i], n0_est[i])
+    #n0_est[i] = n0[i]
  
     # remove n0_est and set up rect training data    
     for m in range(1,L[i]+1):
