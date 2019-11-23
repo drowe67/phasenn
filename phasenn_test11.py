@@ -46,9 +46,9 @@ assert loss_func([[[0,1,0]], [[0,2,0]]]) == np.array([1])
 # constants
 
 N                 = 80      # number of time domain samples in frame
-nb_samples        = 12
+nb_samples        = 100000
 nb_batch          = 32
-nb_epochs         = 10
+nb_epochs         = 25
 width             = 256
 pairs             = 2*width
 fo_min            = 50
@@ -112,7 +112,7 @@ phase_n0_removed = np.zeros((nb_samples, width))
 for i in range(nb_samples):
     err_min = 1E32
     P = 2*L[i]
-
+    '''
     for test_n0 in np.arange(0,P,0.25):
         e = np.exp(-1j*test_n0*np.arange(1,L[i]+1)*Wo[i])
         err = np.dot(10**amp[i,1:L[i]+1], np.abs(np.exp(1j*phase[i,1:L[i]+1]) - e)**2)
@@ -120,7 +120,9 @@ for i in range(nb_samples):
             err_min = err
             n0_est[i] = test_n0
     print(n0[i], n0_est[i])
-    #n0_est[i] = n0[i]
+    '''
+    r = np.random.rand(1)
+    n0_est[i] = n0[i] + 2*r - 1
  
     # remove n0_est and set up rect training data    
     for m in range(1,L[i]+1):
@@ -137,7 +139,7 @@ model.add(layers.Dense(pairs))
 model.summary()
 
 from keras import optimizers
-sgd = optimizers.SGD(lr=0.2, decay=1e-6, momentum=0.9, nesterov=True)
+sgd = optimizers.SGD(lr=0.8, decay=1e-6, momentum=0.9, nesterov=True)
 model.compile(loss=sparse_loss, optimizer=sgd)
 history = model.fit(amp_, phase_rect, batch_size=nb_batch, epochs=nb_epochs)
 
@@ -153,12 +155,12 @@ for i in range(nb_samples):
         used_bins[i,m] = 1
         
 ind = np.nonzero(used_bins)
-c1 = np.exp(1j*phase_n0_removed[ind]); c2 = np.exp(1j*phase_est[ind]);
+c1 = np.exp(1j*phase_disp[ind]); c2 = np.exp(1j*phase_est[ind]);
 err_angle = np.angle(c1 * np.conj(c2))       
 var = np.var(err_angle)
 std = np.std(err_angle)
 print("angle var: %4.2f std: %4.2f rads" % (var,std))
-print("angle var: %4.2f std: %4.2f degs" % (var*180/np.pi,std*180/np.pi))
+print("angle var: %4.2f std: %4.2f degs" % ((std*180/np.pi)**2,std*180/np.pi))
 
 plot_en = 1;
 if plot_en:
@@ -189,7 +191,7 @@ if plot_en:
         plt.subplot(3,4,r+1)
         plt.plot(phase_disp[r,:L[r]]*180/np.pi,'g')
         plt.plot(phase_n0_removed[r,:L[r]]*180/np.pi,'r')
-        #plt.plot(phase_est[r,:L[r]]*180/np.pi,'r')
+        plt.plot(phase_est[r,:L[r]]*180/np.pi,'b')
         plt.ylim(-180,180)
     plt.show(block=False)
     
