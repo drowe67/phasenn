@@ -87,22 +87,27 @@ for i in range(nb_samples):
     # pitch period in samples
     P = 2*L[i]
  
-    r = np.random.rand(3)
-    
     # sample 2nd order IIR filter with random peak freq, choose alpha
     # and gamma to get something like voiced speech
-    alpha = 0.1*np.pi + 0.4*np.pi*r[0]
-    gamma = 0.9 + 0.09*r[1]
-    w,h = signal.freqz(1, [1, -2*gamma*np.cos(alpha), gamma*gamma], range(1,L[i]+1)*Wo[i])
+    r = np.random.rand(2)
+    alpha1 = 0.05*np.pi + 0.25*np.pi*r[0]
+    gamma1 = 0.9 + 0.09*r[1]
+    w1,h1 = signal.freqz(1, [1, -2*gamma1*np.cos(alpha1), gamma1*gamma1], range(1,L[i]+1)*Wo[i])
 
+    r = np.random.rand(2)
+    alpha2 = alpha1 + 0.4*np.pi*r[0]
+    gamma2 = 0.8 + 0.1*r[1]
+    w2,h2 = signal.freqz(1, [1, -2*gamma2*np.cos(alpha2), gamma2*gamma2], range(1,L[i]+1)*Wo[i])
+    
     # select n0 between 0...P-1 (it's periodic)
-    n0[i] = r[2]*P
+    r = np.random.rand(1)    
+    n0[i] = r[0]*P
     e = np.exp(-1j*n0[i]*range(1,L[i]+1)*Wo[i])
 
     for m in range(1,L[i]+1):
-        amp[i,m] = np.log10(np.abs(h[m-1]))
-        phase[i,m] = np.angle(h[m-1]*e[m-1])
-        phase_disp[i,m] = np.angle(h[m-1])
+        amp[i,m] = np.log10(np.abs(h1[m-1]*h2[m-1]))
+        phase[i,m] = np.angle(h1[m-1]*h2[m-1]*e[m-1])
+        phase_disp[i,m] = np.angle(h1[m-1]*h2[m-1])
 
 # use regular DSP to estimate n0, and remove effect of linear phase
 
