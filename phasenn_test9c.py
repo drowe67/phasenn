@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# phasenn_test9.py
+# phasenn_test9c.py
 #
 # David Rowe Nov 2019
 
@@ -7,7 +7,7 @@
 #
 # periodic impulse train Wo at time offset n0 -> 2nd order system -> discrete phase specta -> NN -> n0
 #
-# This version ysues regular DSP rather than a NN
+# This version uses regular DSP rather than a NN to estimate n0
 
 import numpy as np
 import sys
