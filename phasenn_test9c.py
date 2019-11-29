@@ -1,29 +1,24 @@
 #!/usr/bin/python3
-# phasenn_test9.py
+# phasenn_test9c.py
 #
 # David Rowe Nov 2019
 
 # Estimate an impulse position from the phase spectra of a 2nd order system excited by an impulse
 #
 # periodic impulse train Wo at time offset n0 -> 2nd order system -> discrete phase specta -> NN -> n0
-
+#
+# This version uses regular DSP rather than a NN to estimate n0
 
 import numpy as np
 import sys
-from keras.layers import Dense
-from keras import models,layers
-from keras import initializers
 import matplotlib.pyplot as plt
 from scipy import signal
-from keras import backend as K
 
 # constants
 
 Fs                = 8000
 N                 = 80      # number of time domain samples in frame
-nb_samples        = 10000
-nb_batch          = 32
-nb_epochs         = 30
+nb_samples        = 1000
 width             = 256
 pairs             = 2*width
 fo_min            = 50
@@ -65,34 +60,40 @@ for i in range(nb_samples):
     
     # select n0 between 0...P-1 (it's periodic)
     n0[i] = r[2]*P
-    e = np.exp(-1j*n0[i]*range(1,width)*np.pi/width)
+    #n0[i] = 10
+    e = np.exp(-1j*n0[i]*range(width)*np.pi/width)
     
     for m in range(1,L[i]):
         bin = int(np.round(m*Wo[i]*width/np.pi))
-        mWo = bin*np.pi/width
         
         amp[i,bin] = np.log10(abs(h[m-1]))
         phase[i,bin] = np.angle(h[m-1]*e[bin])
+        #phase[i,bin] = np.angle(e[bin])
         phase_rect[i,2*bin]   = np.cos(phase[i,bin])
         phase_rect[i,2*bin+1] = np.sin(phase[i,bin])
 
         # target is n0 in rec coords                      
-        target[i] = n0[i]/P_max
+        target[i] = n0[i]
         
-model = models.Sequential()
-model.add(layers.Dense(pairs, activation='relu', input_dim=pairs))
-model.add(layers.Dense(128, activation='relu'))
-model.add(layers.Dense(1))
-model.summary()
+# use regular DSP to estimate n0
 
-from keras import optimizers
-sgd = optimizers.SGD(lr=0.08, decay=1e-6, momentum=0.9, nesterov=True)
-model.compile(loss="mse", optimizer=sgd)
-history = model.fit(phase_rect, target, batch_size=nb_batch, epochs=nb_epochs)
-
+target_est =  np.zeros((nb_samples,1))
+for i in range(nb_samples):
+    err_min = 1E32
+    P = 2*L[i]
+    for test_n0 in np.arange(0,P,0.25):
+        e = np.exp(-1j*test_n0*np.arange(width)*np.pi/width)
+        err = 0.0
+        for m in range(1,L[i]):
+            bin = int(np.round(m*Wo[i]*width/np.pi))
+            err = err + (10**amp[i,bin])*(np.abs(np.exp(1j*phase[i,bin]) - e[bin])**2)
+        if err < err_min:
+            err_min = err
+            target_est[i] = test_n0
+        #print(i,test_n0, err, err_min)
+        
 # measure error in rectangular coordinates over all samples
 
-target_est = model.predict(phase_rect)
 err = target - target_est
 var = np.var(err)
 std = np.std(err)
@@ -123,12 +124,6 @@ def sample_time(r):
 
 plot_en = 1;
 if plot_en:
-    plt.figure(1)
-    plt.plot(history.history['loss'])
-    plt.title('model loss')
-    plt.xlabel('epoch')
-    plt.show(block=False)
- 
     plt.figure(2)
     plt.hist(err, bins=20)
     plt.show(block=False)
@@ -152,7 +147,7 @@ if plot_en:
     for r in range(12):
         plt.subplot(3,4,r+1)
         s = sample_time(r)
-        n0_ = target_est[r]*P_max
+        n0_ = target_est[r]
         print("F0: %5.1f P: %3d L: %3d n0: %3d n0_est: %5.1f" % (Wo[r]*(Fs/2)/np.pi, P, L[r], n0[r], n0_))
         plt.plot(s,'g')
         plt.plot([n0[r],n0[r]], [-25,25],'r')
