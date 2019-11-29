@@ -46,9 +46,9 @@ assert loss_func([[[0,1,0]], [[0,2,0]]]) == np.array([1])
 # constants
 
 N                 = 80      # number of time domain samples in frame
-nb_samples        = 1000
+nb_samples        = 100000
 nb_batch          = 32
-nb_epochs         = 10
+nb_epochs         = 100
 width             = 256
 pairs             = 2*width
 fo_min            = 50
@@ -89,22 +89,22 @@ for i in range(nb_samples):
     P = 2*L[i]
  
     r = np.random.rand(1)
-    voiced = r[0] > 0.5
+    voiced[i] = r[0] > 0.5
     
     # sample 2nd order IIR filter with random peak freq
 
     r1 = np.random.rand(2)
     r2 = np.random.rand(2)
-    if voiced:
+    if voiced[i]:
         # choose alpha and gamma to get something like voiced speech
         alpha1 = 0.05*np.pi + 0.25*np.pi*r1[0]
         gamma1 = 0.9 + 0.09*r1[1]
         alpha2 = alpha1 + 0.4*np.pi*r2[0]
         gamma2 = 0.9 + 0.05*r2[1]
     else:
-        alpha1 = 0.5*np.pi + 0.5*np.pi*r1[0]
+        alpha1 = 0.5*np.pi + 0.9*np.pi*r1[0]
         gamma1 = 0.8 + 0.1*r1[1]
-        alpha2 = 0.5*np.pi + 0.5*np.pi*r2[0]
+        alpha2 = 0.5*np.pi + 0.9*np.pi*r2[0]
         gamma2 = 0.8 + 0.1*r2[1]
         
     w1,h1 = signal.freqz(1, [1, -2*gamma1*np.cos(alpha1), gamma1*gamma1], range(1,L[i]+1)*Wo[i])
@@ -117,7 +117,7 @@ for i in range(nb_samples):
 
     for m in range(1,L[i]+1):
         amp[i,m] = np.log10(np.abs(h1[m-1]*h2[m-1]))
-        if voiced:
+        if voiced[i]:
             phase[i,m] = np.angle(h1[m-1]*h2[m-1]*e[m-1])
             phase_disp[i,m] = np.angle(h1[m-1]*h2[m-1])
         else:
@@ -212,7 +212,8 @@ if plot_en:
     for r in range(12):
         plt.subplot(3,4,r+1)
         plt.plot(phase_disp[r,:L[r]]*180/np.pi,'g')
-        plt.plot(phase_n0_removed[r,:L[r]]*180/np.pi,'r')
+        if voiced[r]:
+            plt.plot(phase_n0_removed[r,:L[r]]*180/np.pi,'r')
         plt.plot(phase_est[r,:L[r]]*180/np.pi,'b')
         plt.ylim(-180,180)
     plt.show(block=False)
