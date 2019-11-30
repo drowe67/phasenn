@@ -68,7 +68,7 @@ for i in range(nb_samples):
     
     # select n0 between 0...P-1 (it's periodic)
     n0[i] = r[2]*P
-    e = np.exp(-1j*n0[i]*range(1,width)*np.pi/width)
+    e = np.exp(-1j*n0[i]*range(width)*np.pi/width)
     
     for m in range(1,L[i]):
         bin = int(np.round(m*Wo[i]*width/np.pi))
