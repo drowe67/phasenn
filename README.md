@@ -10,12 +10,16 @@ For high quality speech, sinusoidal codecs require a suitable set of the sinusoi
 
 ## Status (Dec 2019)
 
-Building up techniques for modelling phase using NNs and toy speech models (cascades of 2nd order filters) in a series of tests.
+Building up techniques for modelling phase using NNs and toy speech models (cascades of 2nd order filters excited by impulse trains) in a series of tests.
 
 Here is the output from [phasenn_test11.py](phasenn_test11.py).  The first plot is a series of magnitude spectra of simulated speech frames.  The voiced frames have two fairly sharp peaks (formants) beneath Fs/2 with structured phase consisting of linear and dispersive terms.  Unvoiced frames have less sharp peaks above Fs/2, and random phases.
 
 ![](example_mag.png "Magnitude Spectra")
 ![](example_phase.png "Phase Spectra")
 
-The next plot shows the original phase spectra (green), the phase spectra with an estimate of the linear phase term removed (red), and the NN ouput estimated phase (blue).  For voiced frames, we would like green (original) and blue (NN estimate) to match.  In particular we want to model the accurate phase shift across the peak of the amplitude spectra - this is the dispersive term that shifts the phase of high energy speech harmonics apart and reducing the buzzy/unnatural quality in synthsised speech.  For unvoiced speech, we want the NN output (blue) to be random.
+The next plot shows the disperive component of the original phase spectra (green), the hase spectra with an estimate of the linear phase term removed (red), and the NN output estimated dispersive phase (blue).  For voiced frames, we would like green (original) and blue (NN estimate) to match.  In particular we want to model the rapid phase shift across the peak of the amplitude spectra - this is the dispersive term that shifts the phase of high energy speech harmonics apart and reduces the buzzy/unnatural quality in synthsised speech.
+
+When training from real world data, we have frames of phase spectra with the linear and disperive phase components combined. We will not know the linear term, and therefore must estimate it. This simulation introduces small errors in the linear term estimation (+/-1 sample), which can lead to large phase differences at high frequencies.  The red (original phase with estimated linear term removed) diverges from the true dispersive input (green), as the estimation of the linear term is not perfect.  However over the training database these errors tend to have a zero mean - this simulation suggests they are being "trained out" by the NN, resulting in a reasonable model of the dispersive term (blue), albiet with some estimation "noise" at high frequencies.  This HF noise may be useful, as it matches the lack of structure of HF phases in real speech.
+
+For unvoiced speech, we want the NN output (blue) to be random.  They do not need to match the original input phase spectra. The NN appears to presever this random phase structure in this simulation.  This may remove the need for a voicing estimate - voicing can be deduced from the magnitude spectra.
 
