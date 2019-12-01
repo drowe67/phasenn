@@ -17,7 +17,7 @@ Building up techniques for modelling phase using NNs and toy speech models (casc
 ## Challenges
 
 1. We must represent phase (angles) in a NN.  Phase is being represnted by (cos(angle), sin(angle)) pairs, which when trained, tend to develop weights that behave like complex numbers/matrix rotations.
-1. The number of phases in the sinsuoidal model is time varying, based on the pitch of the current frame.  This is being modelled by mapping the sinusoids onto sparse, fixed length vectors.   
+1. The number of phases in the sinsuoidal model is time varying, based on the pitch of the current frame.  This is being addressed by mapping the frequency of each sinusoid onto the index a sparse, fixed length vector. 
 
 ## Example
 
