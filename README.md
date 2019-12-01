@@ -2,7 +2,9 @@
 
 A project to model sinusoidal codec phase spectra with neural nets.
 
-Recent breakthroughs in NN speech synthesis (WaveNet, WaveRNN, LPCNet and friends) have resulted in exciting improvements in model based synthesised speech quality.  These algorithms typically use NNs to estimate the PDF of the next speech sample conditioned on input features and a history of previously synthesised speech samples.  This PDF is then sampled to obtain the next output speech sample.  As the algorithms need all previous output speech samples, speech must be generated on a sample by sample basis.  Computational complexity is high, although steadily being reduced.
+## Introduction
+
+Recent breakthroughs in (Neural Net) NN speech synthesis (WaveNet, WaveRNN, LPCNet and friends) have resulted in exciting improvements in model based synthesised speech quality.  These algorithms typically use NNs to estimate the PDF of the next speech sample conditioned on input features and a history of previously synthesised speech samples.  This PDF is then sampled to obtain the next output speech sample.  As the algorithms need all previous output speech samples, speech must be generated on a sample by sample basis.  Computational complexity is high, although steadily being reduced.
 
 Speech codecs employing frequency domain, block based techniques such as sinusoidal transform coding can deliver high quality speech using block based synthesis.  They typically synthesise speech in blocks of 10-20ms at a time (e.g. 160-320 samples at Fs=16kHz) using efficient overlap-add IDFT techniques.  Sinusoidal codecs use a similar parameter set to the features used for NN based synthesis systems (some form of amplitude spectra, pitch information, voicing).
 
@@ -11,6 +13,13 @@ For high quality speech, sinusoidal codecs require a suitable set of the sinusoi
 ## Status (Dec 2019)
 
 Building up techniques for modelling phase using NNs and toy speech models (cascades of 2nd order filters excited by impulse trains) in a series of tests.
+
+## Challenges
+
+1. We must represent phase (angles) in a NN.  Phase is being represnted by (cos(angle), sin(angle)) pairs, which when trained, tend to develop weights that behave like complex numbers/matrix rotations.
+1. The number of phases in the sinsuoidal model is time varying, based on the pitch of the current frame.  This is being modelled by mapping the sinusoids onto sparse, fixed length vectors.   
+
+## Example
 
 Here is the output from [phasenn_test11.py](phasenn_test11.py).  The first plot is a series of magnitude spectra of simulated speech frames.  The voiced frames have two fairly sharp peaks (formants) beneath Fs/2 with structured phase consisting of linear and dispersive terms.  Unvoiced frames have less sharp peaks above Fs/2, and random phases.
 
