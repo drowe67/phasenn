@@ -26,7 +26,7 @@ def read(filename):
     # Determine number of records in file, not very Pythonic I know :-)
 
     nb_samples = 0
-    with open('/home/david/codec2/build_linux/hts1a.model', 'rb') as f:
+    with open(filename, 'rb') as f:
         while True:
             try:
                 model = codec2_model.parse_stream(f)
@@ -43,7 +43,7 @@ def read(filename):
 
     # Read Codec 2 model records into numpy arrays for further work
     
-    with open('/home/david/codec2/build_linux/hts1a.model', 'rb') as f:
+    with open(filename, 'rb') as f:
         for i in range(nb_samples):
             model = codec2_model.parse_stream(f)
             Wo[i] = model.Wo
