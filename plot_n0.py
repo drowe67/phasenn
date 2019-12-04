@@ -36,7 +36,9 @@ nb_samples = Wo.size;
 amp = 20.0*np.log10(A+1E-6)
 # read in n0 estimates
 n0_est = np.loadtxt(sys.argv[2])
+
 print(n0_est[:20])
+print(Wo[:20])
 print("removing linear phase component....")
 phase_n0_removed = np.zeros((nb_samples, width))
 for i in range(nb_samples):
@@ -58,7 +60,7 @@ def sample_time(r):
     s = np.zeros(2*N);
     
     for m in range(1,L[r]+1):
-        s = s + A[r,m]*np.cos(m*Wo[r]*range(2*N) + phase[r,m])
+        s = s + A[r,m]*np.cos(m*Wo[r]*range(-N,N) + phase[r,m])
     return s
 
 plot_en = 1;
@@ -89,9 +91,10 @@ if plot_en:
         plt.subplot(3,4,r+1)
         f = frame[r];
         s = sample_time(f)
-        plt.plot(s,'g')
+        plt.plot(range(-N,N),s,'g')
         mx = np.max(np.abs(s))
-        plt.plot([n0_est[f],n0_est[f]], [-mx/2,mx/2],'b')
+        print(r,f,n0_est[f])
+        plt.plot([-n0_est[f],-n0_est[f]], [-mx/2,mx/2],'b')
     plt.show(block=False)
 
     # click on last figure to close all and finish

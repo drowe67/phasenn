@@ -102,9 +102,9 @@ for i in range(nb_samples):
         alpha2 = alpha1 + 0.4*np.pi*r2[0]
         gamma2 = 0.9 + 0.05*r2[1]
     else:
-        alpha1 = 0.5*np.pi + 0.9*np.pi*r1[0]
+        alpha1 = 0.5*np.pi + 0.4*np.pi*r1[0]
         gamma1 = 0.8 + 0.1*r1[1]
-        alpha2 = 0.5*np.pi + 0.9*np.pi*r2[0]
+        alpha2 = 0.5*np.pi + 0.4*np.pi*r2[0]
         gamma2 = 0.8 + 0.1*r2[1]
         
     w1,h1 = signal.freqz(1, [1, -2*gamma1*np.cos(alpha1), gamma1*gamma1], range(1,L[i]+1)*Wo[i])
