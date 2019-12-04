@@ -9,7 +9,7 @@ if [ "$#" -ne 1 ]; then
 else
     n0=$1
 fi
-timpulse 190 $n0 | c2sim - --modelout imp.model
+timpulse 190 $n0 filt  | c2sim - --modelout imp.model
 cat imp.model | est_n0 > imp_n0.txt
 ./plot_n0.py imp.model imp_n0.txt
 
