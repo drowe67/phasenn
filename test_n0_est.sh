@@ -9,7 +9,9 @@ if [ "$#" -ne 1 ]; then
 else
     n0=$1
 fi
-timpulse 190 $n0 filt  | c2sim - --modelout imp.model
+# 190 Hz is not frame syncronous
+timpulse 190 $n0 filter | c2sim - --modelout imp.model
 cat imp.model | est_n0 > imp_n0.txt
-./plot_n0.py imp.model imp_n0.txt
+cat imp.model | est_n0 -r > imp_nolinear.model
+./plot_n0.py imp_nolinear.model
 

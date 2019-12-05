@@ -11,8 +11,5 @@ speech=$1
 x=$(basename $speech)
 base="${x%.*}"
 
-c2sim $speech --modelout $base'.model'
-cat $base.model | est_n0 > $base'_n0.txt'
-./plot_n0.py $base'.model' $base'_n0.txt'
-
-
+c2sim $speech --modelout - | est_n0 -r > $base'_nolinear.model'
+./plot_n0.py $base'_nolinear.model' --start 25
