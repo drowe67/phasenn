@@ -35,6 +35,7 @@ import matplotlib.pyplot as plt
 from scipy import signal
 import codec2_model
 import argparse
+import os
 
 # constants
 
@@ -46,6 +47,7 @@ parser = argparse.ArgumentParser(description='Plot phase spectra and synthesised
 parser.add_argument('modelfile', help='Codec 2 model file')
 parser.add_argument('--n0file', help='text file of n0 estimates')
 parser.add_argument('--start', type=int, default=30, help=' start frame')
+parser.add_argument('--png', action='store_true')
 
 args = parser.parse_args()
 # read in model file records
@@ -144,3 +146,22 @@ plt.show(block=False)
 print("Click on last figure to finish....")
 plt.waitforbuttonpress(0)
 plt.close()
+
+# optionally generate some PNGs to flip though
+
+if args.png:
+    png_basename = os.path.basename(args.modelfile)
+    png_basename = os.path.splitext(png_basename)[0]
+    for r in range(nb_plots):
+        fig, ax1 = plt.subplots()
+        f = frame[r];
+        freq = range(1,L[f])*Wo[f]*Fs/(2*np.pi)
+        ax1.plot(freq, amp[f,1:L[f]],'g')
+        ax1.set_ylabel('amp', color='g')
+        ax2 = ax1.twinx()
+        ax2.plot(freq,phase[f,1:L[f]]*180/np.pi, 'r')
+        ax2.set_ylabel('phase', color='r')
+        png_name = "%s_%02d.png" % (png_basename,f)
+        print("Writing %s" % (png_name))
+        plt.savefig(png_name)
+        
