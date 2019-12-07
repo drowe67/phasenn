@@ -1,114 +1,158 @@
 #!/usr/bin/python3
 # phasenn_train.py
 #
-# David Rowe August 2019
+# David Rowe Dec 2019
 #
-# Keras model for estimating the phase of sinusoidally modelled speech
-
-# To generate features:
-#   $ ./c2sim ~/Downloads/all_speech_8k.sw --dumpphase_nnl train.f32
+# Train a NN to model phase from Codec 2 (sinusoidal model) amplitudes.
+#
 
 import numpy as np
 import sys
-from keras.layers import Dense
+import matplotlib.pyplot as plt
+from scipy import signal
+import codec2_model
+import argparse
+import os
+from keras.layers import Input, Dense, Concatenate
 from keras import models,layers
 from keras import initializers
+from keras import backend as K
 
-if len(sys.argv) < 2:
-    print("usage: phasenn_train.py train.f32")
-    sys.exit(0)
+# less verbose tensorflow ....
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 # constants
 
-max_amp     = 80   # sparsevector covering 0 ... Fs/2
-nb_features = 243  # number of sparse features/row in input training data file
-nb_epochs   = 10
+N                 = 80      # number of time domain samples in frame
+width             = 256
+pairs             = 2*width
+Fs                = 8000
+nb_batch          = 32
+nb_plots          = 4
 
-# load training data
+def list_str(values):
+    return values.split(',')
 
-feature_file = sys.argv[1]
-features = np.fromfile(feature_file, dtype='float32')
-nb_frames = int(len(features)/nb_features)
-print("nb_frames: %d" % (nb_frames))
+parser = argparse.ArgumentParser(description='Train a NN to model Codec 2 phases')
+parser.add_argument('modelfile', help='Codec 2 model file with linear phase removed')
+parser.add_argument('--frames', type=list_str, default="30,31,32,33", help='Frames to view')
+parser.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
+args = parser.parse_args()
 
-# 0..80    log10(A)
-# 81..161  cos(phi)
-# 162..242 sin(phi)
+assert nb_plots == len(args.frames)
 
-features = np.reshape(features, (nb_frames, nb_features))
-print("features shape:")
-print(features.shape)
+# read in model file records
+Wo, L, A, phase, voiced = codec2_model.read(args.modelfile)
+nb_samples = Wo.size;
+print("nb_samples: %d" % (nb_samples))
 
-# So the idea is we can predict the next frames phases from the
-# current frame, and the magnitude spectrum.  For voiced speech, the
-# sinusoids are continuous, so can be predicted from frame to frame if
-# you know the frequency and previous phase.  We encode the frequency
-# as the position in the sprase vector.
+# set up sparse vectors, phase represented by cos(), sin() pairs
+amp = np.zeros((nb_samples, width))
+phase_rect = np.zeros((nb_samples, pairs))
+for i in range(nb_samples):
+    for m in range(1,L[i]+1):
+        bin = int(np.round(m*Wo[i]*width/np.pi)); bin = min(width-1, bin)
+        amp[i,bin] = np.log10(A[i,m])
+        phase_rect[i,2*bin]   = np.cos(phase[i,m])
+        phase_rect[i,2*bin+1] = np.sin(phase[i,m])
 
-# Cascased with that is phase spectra due to dispersion of the phase
-# response of the vocal tract filter, e.g. a large dispersion around
-# resonances.  We supply the magnitude spectra to help model the vocal
-# tract filter phase.
-
-# Unvoiced speech has more random phase.  Hopefully the NN can work
-# out if the speech is voiced or unvoiced from the magnitide spectra.
-
-# The phase is encoded using cos and sin of the phase, as these are
-# bounded by +/-1
-
-# So input features are this frame's log(A), and last frames phase.
-# The output features we are trying to model are this frames phase.
-
-train = np.concatenate( (features[1:,:max_amp+1], features[:-1,max_amp+1:]) )
-target = features([1:,max_amp+1:])
-
+# our model
 model = models.Sequential()
-model.add(layers.Dense(256, activation='relu', input_dim=nb_input))
-model.add(layers.Dense(256, activation='relu'))
-model.add(layers.Dense(256, activation='relu'))
-model.add(layers.Dense(nb_ouput, activation='linear'))
+model.add(layers.Dense(pairs, activation='relu', input_dim=width))
+model.add(layers.Dense(4*pairs, activation='relu'))
+model.add(layers.Dense(pairs))
+model.summary()
 
-# Custom loss function that measures difference in phase just at
-# non-zero elements of target (ytrue).  This could be extended to
-# weight each phase error by the (log) Amplitude of each harmonic
+# custom loss function
+def sparse_loss(y_true, y_pred):
+    mask = K.cast( K.not_equal(y_pred, 0), dtype='float32')
+    n = K.sum(mask)
+    return K.sum(K.square((y_pred - y_true)*mask))/n
 
-import keras.backend as K
-def customLoss(yTrue, yPred):
-    # generate a mask vector with 1's on non zero values of yTrue
-    mask = abs(K.sign(yTrue))
-    # collect error in cos() and sin() terms, ignoring yPred values outside of
-    # harmonics we care about
-    error = yTrue - mask * yPred
-    return K.sum(error * error)
+# testing custom loss function
+x = Input(shape=(None,))
+y = Input(shape=(None,))
+loss_func = K.Function([x, y], [sparse_loss(x, y)])
+assert loss_func([[[1,1,1]], [[0,2,0]]]) == np.array([1])
+assert loss_func([[[0,1,0]], [[0,2,0]]]) == np.array([1])
 
-# Compile our model 
-
+# fit the model
 from keras import optimizers
-model.compile(loss=customLoss, optimizer='sge')
+sgd = optimizers.SGD(lr=0.8, decay=1e-6, momentum=0.9, nesterov=True)
+model.compile(loss=sparse_loss, optimizer=sgd)
+history = model.fit(amp, phase_rect, batch_size=nb_batch, epochs=args.epochs)
 
-# fit model, using 20% of our data for validation
 
-history = model.fit(train, target, validation_split=0.2, batch_size=32, epochs=nb_epochs)
-model.save("phasenn_model.h5")
+# measure error in angle over all samples
 
-import matplotlib.pyplot as plt
+phase_rect_est = model.predict(amp)
+phase_est = np.zeros((nb_samples, width))
+used_bins = np.zeros((nb_samples, width), dtype=int)
+for i in range(nb_samples):
+    for m in range(1,L[i]+1):
+        bin = int(np.round(m*Wo[i]*width/np.pi)); bin = min(width-1, bin)
+        phase_est[i,m] = np.angle(phase_rect_est[i,2*bin] + 1j*phase_rect_est[i,2*bin+1])
+        used_bins[i,m] = 1
+        
+ind = np.nonzero(used_bins)
+c1 = np.exp(1j*phase[ind]); c2 = np.exp(1j*phase_est[ind]);
+err_angle = np.angle(c1 * np.conj(c2))       
+var = np.var(err_angle)
+std = np.std(err_angle)
+print("angle var: %4.2f std: %4.2f rads" % (var,std))
+print("angle var: %4.2f std: %4.2f degs" % ((std*180/np.pi)**2,std*180/np.pi))
 
-plot_en = 0;
-if plot_en:
-    plt.figure(1)
-    plt.plot(10*np.sqrt(history.history['loss']))
-    plt.plot(10*np.sqrt(history.history['val_loss']))
-    plt.title('model loss')
-    plt.ylabel('rms error (rad)')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'valid'], loc='upper right')
-    plt.show()
 
-# run model on training data and measure variance, should be similar to training "loss"
+# synthesise time domain signal
+def sample_time(r, phase):
+    s = np.zeros(2*N);
+    
+    for m in range(1,L[r]+1):
+        s = s + A[r,m]*np.cos(m*Wo[r]*range(-N,N) + phase[r,m])
+    return s
 
-train_out = model.predict(train)
-err = (train_out - target)
-var = np.var(err)
-std = np.std(err)
-print("var: %f std: %f" % (var,std))
+nb_plotsy = np.floor(np.sqrt(nb_plots)); nb_plotsx=nb_plots/nb_plotsy;
+frames = np.array(args.frames,dtype=int)
 
+plt.figure(1)
+plt.plot(history.history['loss'])
+plt.title('model loss')
+plt.xlabel('epoch')
+plt.show(block=False)
+
+plt.figure(2)
+plt.title('Amplitudes Spectra')
+for r in range(nb_plots):
+    plt.subplot(nb_plotsy,nb_plotsx,r+1)
+    f = frames[r];
+    plt.plot(np.log10(A[f,1:L[f]]),'g')
+    t = "frame %d" % (f)
+    plt.title(t)
+plt.show(block=False)
+
+plt.figure(3)
+plt.title('Phase Spectra')
+for r in range(nb_plots):
+    plt.subplot(nb_plotsy,nb_plotsx,r+1)
+    f = frames[r]
+    plt.plot(phase[f,1:L[f]]*180/np.pi,'g')        
+    plt.plot(phase_est[f,1:L[f]]*180/np.pi,'r')        
+    plt.ylim(-180,180)
+    plt.legend(("phase","phase_est"))
+plt.show(block=False)
+    
+plt.figure(4)
+plt.title('Time Domain')
+for r in range(nb_plots):
+    plt.subplot(nb_plotsy,nb_plotsx,r+1)
+    f = frames[r];
+    s = sample_time(f, phase)
+    s_est = sample_time(f, phase_est)
+    plt.plot(range(-N,N),s,'g')
+    plt.plot(range(-N,N),s_est,'r') 
+    plt.legend(("s","s_est"))
+plt.show(block=False)
+
+print("Click on last figure to finish....")
+plt.waitforbuttonpress(0)
+plt.close()

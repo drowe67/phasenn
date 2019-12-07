@@ -12,4 +12,4 @@ x=$(basename $speech)
 base="${x%.*}"
 
 c2sim $speech --modelout - | est_n0 -r > $base'_nolinear.model'
-./plot_n0.py $base'_nolinear.model' --start 25
+./plot_n0.py $base'_nolinear.model'

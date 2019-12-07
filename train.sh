@@ -4,9 +4,9 @@
 
 PATH=$PATH:~/codec2/build_linux/src:~/codec2/build_linux/misc
 
-speech=~/Downloads/all_8k.sw
+speech=~/Downloads/train_8k.sw
 x=$(basename $speech)
 base="${x%.*}"
 
-c2sim $speech --modelout - | est_n0 -r > $base'_nolinear.model'
-./phasenn_train.py $base'_nolinear.model' --frames 560,655,990,2899
+sox -t .sw -r 8000 -c 1 $speech -t .sw - trim 0 600 | c2sim - --modelout - | est_n0 -r > $base'_nolinear.model'
+./phasenn_train.py $base'_nolinear.model' --frames 1572,1908,6792,9600
