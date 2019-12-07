@@ -28,7 +28,7 @@ width             = 256
 pairs             = 2*width
 Fs                = 8000
 nb_batch          = 32
-nb_plots          = 4
+nb_plots          = 6
 
 def list_str(values):
     return values.split(',')
@@ -53,8 +53,8 @@ for i in range(nb_samples):
     for m in range(1,L[i]+1):
         bin = int(np.round(m*Wo[i]*width/np.pi)); bin = min(width-1, bin)
         amp[i,bin] = np.log10(A[i,m])
-        phase_rect[i,2*bin]   = np.cos(phase[i,m])
-        phase_rect[i,2*bin+1] = np.sin(phase[i,m])
+        phase_rect[i,2*bin]   = amp[i,bin]*np.cos(phase[i,m])
+        phase_rect[i,2*bin+1] = amp[i,bin]* np.sin(phase[i,m])
 
 # our model
 model = models.Sequential()
@@ -81,7 +81,7 @@ from keras import optimizers
 sgd = optimizers.SGD(lr=0.8, decay=1e-6, momentum=0.9, nesterov=True)
 model.compile(loss=sparse_loss, optimizer=sgd)
 history = model.fit(amp, phase_rect, batch_size=nb_batch, epochs=args.epochs)
-
+model.save("phasenn_model.h5")
 
 # measure error in angle over all samples
 
