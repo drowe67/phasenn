@@ -35,8 +35,9 @@ def list_str(values):
 
 parser = argparse.ArgumentParser(description='Train a NN to model Codec 2 phases')
 parser.add_argument('modelfile', help='Codec 2 model file with linear phase removed')
-parser.add_argument('--frames', type=list_str, default="30,31,32,33", help='Frames to view')
+parser.add_argument('--frames', type=list_str, default="30,31,32,33,34,35", help='Frames to view')
 parser.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
+parser.add_argument('--nnout', type=str, default="phasenn.h5", help='Name of output Codec 2 model file')
 args = parser.parse_args()
 
 assert nb_plots == len(args.frames)
@@ -53,9 +54,11 @@ for i in range(nb_samples):
     for m in range(1,L[i]+1):
         bin = int(np.round(m*Wo[i]*width/np.pi)); bin = min(width-1, bin)
         amp[i,bin] = np.log10(A[i,m])
+        #phase_rect[i,2*bin]   = np.max((1,amp[i,bin]))*np.cos(phase[i,m])
+        #phase_rect[i,2*bin+1] = np.max((1,amp[i,bin]))*np.sin(phase[i,m])
         phase_rect[i,2*bin]   = amp[i,bin]*np.cos(phase[i,m])
-        phase_rect[i,2*bin+1] = amp[i,bin]* np.sin(phase[i,m])
-
+        phase_rect[i,2*bin+1] = amp[i,bin]*np.sin(phase[i,m])
+    
 # our model
 model = models.Sequential()
 model.add(layers.Dense(pairs, activation='relu', input_dim=width))
@@ -81,7 +84,7 @@ from keras import optimizers
 sgd = optimizers.SGD(lr=0.8, decay=1e-6, momentum=0.9, nesterov=True)
 model.compile(loss=sparse_loss, optimizer=sgd)
 history = model.fit(amp, phase_rect, batch_size=nb_batch, epochs=args.epochs)
-model.save("phasenn_model.h5")
+model.save(args.nnout)
 
 # measure error in angle over all samples
 
@@ -101,7 +104,6 @@ var = np.var(err_angle)
 std = np.std(err_angle)
 print("angle var: %4.2f std: %4.2f rads" % (var,std))
 print("angle var: %4.2f std: %4.2f degs" % ((std*180/np.pi)**2,std*180/np.pi))
-
 
 # synthesise time domain signal
 def sample_time(r, phase):
@@ -138,7 +140,7 @@ for r in range(nb_plots):
     plt.plot(phase[f,1:L[f]]*180/np.pi,'g')        
     plt.plot(phase_est[f,1:L[f]]*180/np.pi,'r')        
     plt.ylim(-180,180)
-    plt.legend(("phase","phase_est"))
+    #plt.legend(("phase","phase_est"))
 plt.show(block=False)
     
 plt.figure(4)
@@ -150,7 +152,7 @@ for r in range(nb_plots):
     s_est = sample_time(f, phase_est)
     plt.plot(range(-N,N),s,'g')
     plt.plot(range(-N,N),s_est,'r') 
-    plt.legend(("s","s_est"))
+    #plt.legend(("s","s_est"))
 plt.show(block=False)
 
 print("Click on last figure to finish....")
