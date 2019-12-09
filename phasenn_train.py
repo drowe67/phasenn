@@ -56,8 +56,10 @@ for i in range(nb_samples):
         amp[i,bin] = np.log10(A[i,m])
         #phase_rect[i,2*bin]   = np.max((1,amp[i,bin]))*np.cos(phase[i,m])
         #phase_rect[i,2*bin+1] = np.max((1,amp[i,bin]))*np.sin(phase[i,m])
-        phase_rect[i,2*bin]   = amp[i,bin]*np.cos(phase[i,m])
-        phase_rect[i,2*bin+1] = amp[i,bin]*np.sin(phase[i,m])
+        #phase_rect[i,2*bin]   = amp[i,bin]*np.cos(phase[i,m])
+        #phase_rect[i,2*bin+1] = amp[i,bin]*np.sin(phase[i,m])
+        phase_rect[i,2*bin]   = np.cos(phase[i,m])
+        phase_rect[i,2*bin+1] = np.sin(phase[i,m])
     
 # our model
 model = models.Sequential()
@@ -66,24 +68,28 @@ model.add(layers.Dense(4*pairs, activation='relu'))
 model.add(layers.Dense(pairs))
 model.summary()
 
-# custom loss function
+# custom loss function - we only care about (cos,sin) outputs at the
+# non-zero positions in the sparse y_true vector.  To avoid driving the
+# other samples to 0 we use a sparse loss function.  The normalisation
+# term accounts for the time varying number of no-zero samples.
 def sparse_loss(y_true, y_pred):
-    mask = K.cast( K.not_equal(y_pred, 0), dtype='float32')
+    mask = K.cast( K.not_equal(y_true, 0), dtype='float32')
     n = K.sum(mask)
     return K.sum(K.square((y_pred - y_true)*mask))/n
 
 # testing custom loss function
-x = Input(shape=(None,))
-y = Input(shape=(None,))
-loss_func = K.Function([x, y], [sparse_loss(x, y)])
-assert loss_func([[[1,1,1]], [[0,2,0]]]) == np.array([1])
+y_true = Input(shape=(None,))
+y_pred = Input(shape=(None,))
+loss_func = K.Function([y_true, y_pred], [sparse_loss(y_true, y_pred)])
+assert loss_func([[[0,1,0]], [[2,2,2]]]) == np.array([1])
+assert loss_func([[[1,1,0]], [[3,2,2]]]) == np.array([2.5])
 assert loss_func([[[0,1,0]], [[0,2,0]]]) == np.array([1])
 
 # fit the model
 from keras import optimizers
-sgd = optimizers.SGD(lr=0.8, decay=1e-6, momentum=0.9, nesterov=True)
+sgd = optimizers.SGD(lr=0.05, decay=1e-6, momentum=0.9, nesterov=True)
 model.compile(loss=sparse_loss, optimizer=sgd)
-history = model.fit(amp, phase_rect, batch_size=nb_batch, epochs=args.epochs)
+history = model.fit(amp, phase_rect, batch_size=nb_batch, epochs=args.epochs, validation_split=0.1)
 model.save(args.nnout)
 
 # measure error in angle over all samples
@@ -113,11 +119,14 @@ def sample_time(r, phase):
         s = s + A[r,m]*np.cos(m*Wo[r]*range(-N,N) + phase[r,m])
     return s
 
-nb_plotsy = np.floor(np.sqrt(nb_plots)); nb_plotsx=nb_plots/nb_plotsy;
 frames = np.array(args.frames,dtype=int)
+nb_plots = frames.size
+nb_plotsy = np.floor(np.sqrt(nb_plots)); nb_plotsx=nb_plots/nb_plotsy;
 
 plt.figure(1)
 plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.legend(['train', 'valid'], loc='upper right')
 plt.title('model loss')
 plt.xlabel('epoch')
 plt.show(block=False)
