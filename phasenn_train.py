@@ -38,6 +38,7 @@ parser.add_argument('modelfile', help='Codec 2 model file with linear phase remo
 parser.add_argument('--frames', type=list_str, default="30,31,32,33,34,35", help='Frames to view')
 parser.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
 parser.add_argument('--nnout', type=str, default="phasenn.h5", help='Name of output Codec 2 model file')
+parser.add_argument('--plotunvoiced', action='store_true', help='plot unvoiced frames')
 args = parser.parse_args()
 
 assert nb_plots == len(args.frames)
@@ -119,8 +120,17 @@ def sample_time(r, phase):
         s = s + A[r,m]*np.cos(m*Wo[r]*range(-N,N) + phase[r,m])
     return s
 
-frames = np.array(args.frames,dtype=int)
-nb_plots = frames.size
+if args.plotunvoiced:
+    # find first 6 unvoiced frames
+    nb_plots = 6
+    frames = np.zeros(nb_plots, dtype=int)
+    uv = 0
+    for i in range(nb_samples):
+        if (voiced[i] == 0) and (uv < nb_plots):
+            frames[uv] = i; uv += 1
+else:    
+    frames = np.array(args.frames,dtype=int)
+    nb_plots = frames.size
 nb_plotsy = np.floor(np.sqrt(nb_plots)); nb_plotsx=nb_plots/nb_plotsy;
 
 plt.figure(1)

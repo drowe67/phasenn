@@ -48,7 +48,7 @@ for i in range(nb_samples):
     P = 2*L[i]
  
     r = np.random.rand(1)
-    voiced[i] = r[0] > 0.5
+    voiced[i] = r[0] > 0.1
     
     # sample 2nd order IIR filter with random peak freq
 
@@ -60,14 +60,16 @@ for i in range(nb_samples):
         gamma1 = 0.9 + 0.09*r1[1]
         alpha2 = alpha1 + 0.4*np.pi*r2[0]
         gamma2 = 0.9 + 0.05*r2[1]
+        gain = 10
     else:
         alpha1 = 0.5*np.pi + 0.4*np.pi*r1[0]
         gamma1 = 0.8 + 0.1*r1[1]
         alpha2 = 0.5*np.pi + 0.4*np.pi*r2[0]
         gamma2 = 0.8 + 0.1*r2[1]
+        gain = 1
         
-    w1,h1 = signal.freqz(1, [1, -2*gamma1*np.cos(alpha1), gamma1*gamma1], range(1,L[i]+1)*Wo[i])
-    w2,h2 = signal.freqz(1, [1, -2*gamma2*np.cos(alpha2), gamma2*gamma2], range(1,L[i]+1)*Wo[i])
+    w1,h1 = signal.freqz(gain, [1, -2*gamma1*np.cos(alpha1), gamma1*gamma1], range(1,L[i]+1)*Wo[i])
+    w2,h2 = signal.freqz(gain, [1, -2*gamma2*np.cos(alpha2), gamma2*gamma2], range(1,L[i]+1)*Wo[i])
     
     for m in range(1,L[i]+1):
         A[i,m] = np.abs(h1[m-1]*h2[m-1])
