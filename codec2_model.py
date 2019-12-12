@@ -21,7 +21,7 @@ codec2_model = construct.Struct(
     "voiced" / construct.Int32sl
     )
 
-def read(filename, max_nb_samples):
+def read(filename, max_nb_samples=1E32):
     
     # Determine number of records in file, not very Pythonic I know :-)
 

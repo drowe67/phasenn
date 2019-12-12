@@ -15,10 +15,15 @@ len=$4
 x=$(basename $speech)
 base="${x%.*}"
 out_model=out.model
+seg=$(mktemp)'.sw'
+echo $seg
 
-sox -t .sw -r 8000 -c 1 $speech -t .sw - trim $st $len | c2sim - --modelout - | est_n0 -r > $base'_nolinear.model'
+sox -t .sw -r 8000 -c 1 $speech -t .sw - trim $st $len > $seg
+c2sim $seg --modelout - | est_n0 -r > $base'_nolinear.model'
 ./phasenn_out.py $base'_nolinear.model' $nn $base'_out.model'
-sox -t .sw -r 8000 -c 1 $speech -t .sw - trim $st $len | c2sim - --modelout - | est_n0 -a $base'_out.model' > $base'_comb.model'
-sox -t .sw -r 8000 -c 1 $speech -t .sw - trim $st $len | c2sim - --modelin $base'_comb.model' -o $base'_outnn.sw'
-sox -t .sw -r 8000 -c 1 $speech -t .sw - trim $st $len | c2sim - -o $base'_out.sw'
-sox -t .sw $base'_outnn.sw' -t .sw $base'_out.sw' $base'_both.sw'
+c2sim $seg --modelout - | est_n0 -a $base'_out.model' > $base'_comb.model'
+c2sim $seg --modelin $base'_comb.model' -o $base'_outnn.sw'
+
+# orig speech - sinusoidal orig phases - sinusoidal phaseNN
+c2sim $seg -o $base'_out.sw'
+sox $seg $base'_out.sw' $base'_outnn.sw' $base'_all.sw'

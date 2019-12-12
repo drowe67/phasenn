@@ -33,7 +33,7 @@ parser.add_argument('modelin', help='Codec 2 model file in (linear phase removed
 parser.add_argument('phasenn', help='PhaseNN trained .h5 file')
 parser.add_argument('modelout', help='Codec 2 model file out (linear phase removed)')
 parser.add_argument('--start', type=int, default=0, help='start frame')
-parser.add_argument('--length', type=int, default=300, help='Number of frames')
+parser.add_argument('--length', type=int, help='Number of frames')
 args = parser.parse_args()
 
 # read in model file records
@@ -59,12 +59,23 @@ model.load_weights(args.phasenn)
 # compute rate L output phases
 phase_rect_est = model.predict(amp)
 phase_est = np.zeros((nb_samples, width))
-st = args.start; en = args.start+args.length;
+st = args.start
+if args.length:
+    en = args.start + args.length
+else:
+    en = nb_samples
+v = 0; uv = 0
 for i in range(st,en):
     for m in range(1,L[i]+1):
         bin = int(np.round(m*Wo[i]*width/np.pi)); bin = min(width-1, bin)
-        phase_est[i,m] = np.angle(phase_rect_est[i,2*bin] + 1j*phase_rect_est[i,2*bin+1])
-        
+        if voiced[i]:
+            phase_est[i,m] = np.angle(phase_rect_est[i,2*bin] + 1j*phase_rect_est[i,2*bin+1])
+            v += 1
+        else:
+            r = np.random.rand(1)
+            phase_est[i,m] = -np.pi + 2*r[0]*np.pi
+            uv += 1
+print(v,uv)        
 # save to output model file for synthesis
 if args.modelout:
     codec2_model.write(Wo[st:en], L[st:en], A[st:en], phase_est[st:en], voiced[st:en], args.modelout)
