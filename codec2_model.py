@@ -21,20 +21,20 @@ codec2_model = construct.Struct(
     "voiced" / construct.Int32sl
     )
 
-def read(filename):
+def read(filename, max_nb_samples):
     
     # Determine number of records in file, not very Pythonic I know :-)
 
     nb_samples = 0
     with open(filename, 'rb') as f:
-        while True:
+        while True and (nb_samples < max_nb_samples):
             try:
                 model = codec2_model.parse_stream(f)
                 nb_samples += 1
             except:
                 f.close()
                 break
-            
+
     Wo = np.zeros(nb_samples)
     L = np.zeros(nb_samples, dtype=int)
     A = np.zeros((nb_samples, width))

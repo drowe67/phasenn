@@ -17,3 +17,4 @@ else
     c2sim $speech --modelout - | est_n0 -r > $base'_nolinear.model'
 fi
 ./phasenn_train.py $base'_nolinear.model' --frames 1572,1908,6792,9600,24536,25116  --epochs 10
+#./phasenn_train.py $base'_nolinear.model'  --epochs 10

@@ -8,6 +8,7 @@
 
 import numpy as np
 import sys
+from mpl_toolkits.mplot3d import axes3d
 import matplotlib.pyplot as plt
 from scipy import signal
 import codec2_model
@@ -35,8 +36,9 @@ def list_str(values):
 
 parser = argparse.ArgumentParser(description='Train a NN to model Codec 2 phases')
 parser.add_argument('modelfile', help='Codec 2 model file with linear phase removed')
+parser.add_argument('--nb_samples', type=int, default=1000000, help='Number of frames to train on')
 parser.add_argument('--frames', type=list_str, default="30,31,32,33,34,35", help='Frames to view')
-parser.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
+parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
 parser.add_argument('--nnout', type=str, default="phasenn.h5", help='Name of output Codec 2 model file')
 parser.add_argument('--plotunvoiced', action='store_true', help='plot unvoiced frames')
 args = parser.parse_args()
@@ -44,9 +46,20 @@ args = parser.parse_args()
 assert nb_plots == len(args.frames)
 
 # read in model file records
-Wo, L, A, phase, voiced = codec2_model.read(args.modelfile)
+Wo, L, A, phase, voiced = codec2_model.read(args.modelfile, args.nb_samples)
 nb_samples = Wo.size;
-print("nb_samples: %d" % (nb_samples))
+nb_voiced = np.count_nonzero(voiced)
+print("nb_samples: %d voiced %d" % (nb_samples, nb_voiced))
+
+# work out average energy for each frame (in dB)
+energy_thresh = 10
+energy = np.zeros(nb_samples)
+nb_train = 0
+for i in range(nb_samples):
+    energy[i] = np.mean(20*np.log10(A[i,1:L[i]+1]))
+    if (energy[i] > energy_thresh) and voiced[i]:
+        nb_train += 1
+print("energy mean: %4.2f thresh: %4.2f nb_train: %d" % (np.mean(energy),energy_thresh, nb_train))
 
 # set up sparse vectors, phase represented by cos(), sin() pairs
 amp = np.zeros((nb_samples, width))
@@ -55,13 +68,19 @@ for i in range(nb_samples):
     for m in range(1,L[i]+1):
         bin = int(np.round(m*Wo[i]*width/np.pi)); bin = min(width-1, bin)
         amp[i,bin] = np.log10(A[i,m])
-        #phase_rect[i,2*bin]   = np.max((1,amp[i,bin]))*np.cos(phase[i,m])
-        #phase_rect[i,2*bin+1] = np.max((1,amp[i,bin]))*np.sin(phase[i,m])
-        #phase_rect[i,2*bin]   = amp[i,bin]*np.cos(phase[i,m])
-        #phase_rect[i,2*bin+1] = amp[i,bin]*np.sin(phase[i,m])
         phase_rect[i,2*bin]   = np.cos(phase[i,m])
         phase_rect[i,2*bin+1] = np.sin(phase[i,m])
-    
+
+# extract voiced frames above enregy threshold for training
+amp_train = np.zeros((nb_train, width))
+phase_train_rect = np.zeros((nb_train, pairs))
+j = 0
+for i in range(nb_samples):
+    if (energy[i] > energy_thresh) and voiced[i]:
+        amp_train[j,:] = amp[i,:]
+        phase_train_rect[j,:] = phase_rect[i,:]
+        j += 1
+        
 # our model
 model = models.Sequential()
 model.add(layers.Dense(pairs, activation='relu', input_dim=width))
@@ -90,7 +109,9 @@ assert loss_func([[[0,1,0]], [[0,2,0]]]) == np.array([1])
 from keras import optimizers
 sgd = optimizers.SGD(lr=0.05, decay=1e-6, momentum=0.9, nesterov=True)
 model.compile(loss=sparse_loss, optimizer=sgd)
-history = model.fit(amp, phase_rect, batch_size=nb_batch, epochs=args.epochs, validation_split=0.1)
+
+# training propper with real phase data
+history = model.fit(amp_train, phase_train_rect, batch_size=nb_batch, epochs=args.epochs, validation_split=0.1)
 model.save(args.nnout)
 
 # measure error in angle over all samples
