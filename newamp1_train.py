@@ -73,7 +73,7 @@ for i in range(nb_samples):
 # our model
 model = models.Sequential()
 model.add(layers.Dense(4*newamp1_K, activation='relu', input_dim=newamp1_K))
-model.add(layers.Dense(2*width, activation='relu'))
+model.add(layers.Dense(4*newamp1_K, activation='relu'))
 model.add(layers.Dense(width))
 model.summary()
 
