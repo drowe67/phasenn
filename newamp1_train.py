@@ -26,7 +26,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 width             = 256
 nb_batch          = 32
-K                 = 20
+newamp1_K         = 20
 nb_plots          = 6
 
 def list_str(values):
@@ -37,6 +37,7 @@ parser.add_argument('featurefile', help='f32 file of newamp1 rate K vectors')
 parser.add_argument('modelfile', help='Codec 2 model records with rate L vectors')
 parser.add_argument('--frames', type=list_str, default="30,31,32,33,34,35", help='Frames to view')
 parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
+parser.add_argument('--nb_samples', type=int, default=1000000, help='Number of frames to train on')
 args = parser.parse_args()
 assert nb_plots == len(args.frames)
 
@@ -47,26 +48,32 @@ nb_voiced = np.count_nonzero(voiced)
 print("nb_samples: %d voiced %d" % (nb_samples, nb_voiced))
 
 # read in rate K vectors
-features = np.fromfile(args.feature_file, dtype='float32')
-nb_features = 1+K+K
+features = np.fromfile(args.featurefile, dtype='float32')
+nb_features = 1 + newamp1_K + newamp1_K
 nb_samples1 = len(features)/nb_features
 print("nb_samples1: %d" % (nb_samples))
 assert nb_samples == nb_samples1
 features = np.reshape(features, (nb_samples, nb_features))
 print(features.shape)
-rateK = features[:,1:K+1]
+rateK = features[:,newamp1_K+1:]
+print(rateK.shape)
+
+# find ans subtract mean for each frame
+mean_amp = np.zeros(nb_samples)
+for i in range(nb_samples):
+    mean_amp[i] = np.mean(np.log10(A[i,1:L[i]+1]))
 
 # set up sparse amp output vectors
 amp_sparse = np.zeros((nb_samples, width))
 for i in range(nb_samples):
     for m in range(1,L[i]+1):
         bin = int(np.round(m*Wo[i]*width/np.pi)); bin = min(width-1, bin)
-        amp_sparse[i,bin] = 20*np.log10(A[i,m])
+        amp_sparse[i,bin] = np.log10(A[i,m]) - mean_amp[i]
 
 # our model
 model = models.Sequential()
-model.add(layers.Dense(pairs, activation='relu', input_dim=K))
-model.add(layers.Dense(4*K, activation='relu'))
+model.add(layers.Dense(4*newamp1_K, activation='relu', input_dim=newamp1_K))
+model.add(layers.Dense(4*newamp1_K, activation='relu'))
 model.add(layers.Dense(width))
 model.summary()
 
@@ -119,7 +126,7 @@ plt.title('Amplitudes Spectra')
 for r in range(nb_plots):
     plt.subplot(nb_plotsy,nb_plotsx,r+1)
     f = frames[r];
-    plt.plot(20*np.log10(A[f,1:L[f]]),'g')
+    plt.plot(np.log10(A[f,1:L[f]])-mean_amp[f],'g')
     plt.plot(amp_est[f,1:L[f]],'r')
     t = "frame %d" % (f)
     plt.title(t)
