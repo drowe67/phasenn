@@ -27,7 +27,9 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 width             = 256
 nb_batch          = 32
 newamp1_K         = 20
+max_amp           = 160 
 nb_plots          = 6
+N                 = 80
 
 def list_str(values):
     return values.split(',')
@@ -49,16 +51,18 @@ print("nb_samples: %d voiced %d" % (nb_samples, nb_voiced))
 
 # read in rate K vectors
 features = np.fromfile(args.featurefile, dtype='float32')
-nb_features = 1 + newamp1_K + newamp1_K
+nb_features = 1 + newamp1_K + newamp1_K + max_amp
 nb_samples1 = len(features)/nb_features
 print("nb_samples1: %d" % (nb_samples))
 assert nb_samples == nb_samples1
 features = np.reshape(features, (nb_samples, nb_features))
 print(features.shape)
-rateK = features[:,newamp1_K+1:]
+rateK = features[:,newamp1_K+1:2*newamp1_K+1]
 print(rateK.shape)
+A_conventional = features[:,2*newamp1_K+1:]
+print(A_conventional.shape)
 
-# find ans subtract mean for each frame
+# find and subtract mean for each frame
 mean_amp = np.zeros(nb_samples)
 for i in range(nb_samples):
     mean_amp[i] = np.mean(np.log10(A[i,1:L[i]+1]))
@@ -72,15 +76,15 @@ for i in range(nb_samples):
 
 # our model
 model = models.Sequential()
-model.add(layers.Dense(4*newamp1_K, activation='relu', input_dim=newamp1_K))
-model.add(layers.Dense(4*newamp1_K, activation='relu'))
+model.add(layers.Dense(2*newamp1_K, activation='relu', input_dim=newamp1_K))
+model.add(layers.Dense(2*width, activation='relu'))
 model.add(layers.Dense(width))
 model.summary()
 
-# custom loss function - we only care about (cos,sin) outputs at the
-# non-zero positions in the sparse y_true vector.  To avoid driving the
-# other samples to 0 we use a sparse loss function.  The normalisation
-# term accounts for the time varying number of no-zero samples.
+# custom loss function - we only care about outputs at the non-zero
+# positions in the sparse y_true vector.  To avoid driving the other
+# samples to 0 we use a sparse loss function.  The normalisation term
+# accounts for the time varying number of non-zero samples per frame.
 def sparse_loss(y_true, y_pred):
     mask = K.cast( K.not_equal(y_true, 0), dtype='float32')
     n = K.sum(mask)
@@ -100,12 +104,36 @@ sgd = optimizers.SGD(lr=0.05, decay=1e-6, momentum=0.9, nesterov=True)
 model.compile(loss=sparse_loss, optimizer=sgd)
 history = model.fit(rateK, amp_sparse, batch_size=nb_batch, epochs=args.epochs, validation_split=0.1)
 
+# try model over training database
 amp_sparse_est = model.predict(rateK)
+
+# extract amplitudes from sparse vector and estimate variance of
+# quantisation error (mean error squared between original and
+# quantised magnitudes, the spectral distortion)
 amp_est = np.zeros((nb_samples,width))
+error = np.zeros(nb_samples)
+errorc = np.zeros(nb_samples)
+e1 = 0; n = 0; ec1 = 0
 for i in range(nb_samples):
+    e2 = 0; ec2 = 0
     for m in range(1,L[i]+1):
         bin = int(np.round(m*Wo[i]*width/np.pi)); bin = min(width-1, bin)
         amp_est[i,m] = amp_sparse_est[i,bin]
+        e = (amp_sparse_est[i,bin] - amp_sparse[i,bin]) ** 2
+        n+=1; e1 += e; e2 += e;
+        ec = (np.log10(A_conventional[i,m]) - mean_amp[i] - amp_sparse[i,bin]) ** 2
+        ec1 += ec; ec2 += ec
+    error[i] = e2/L[i]
+    errorc[i] = ec2/L[i]
+# mean of error squared is actually the variance
+print("var1: %3.2f var2: %3.2f varc: %3.2f (dB*dB)" % (100*e1/n,100*np.mean(error),100*ec1/n,))
+      
+# synthesise time domain signal
+def sample_time(r, A):
+    s = np.zeros(2*N);
+    for m in range(1,L[r]+1):
+        s = s + A[m]*np.cos(m*Wo[r]*range(-N,N) + phase[r,m])
+    return s
 
 # plot results
 
@@ -125,11 +153,48 @@ plt.figure(2)
 plt.title('Amplitudes Spectra')
 for r in range(nb_plots):
     plt.subplot(nb_plotsy,nb_plotsx,r+1)
-    f = frames[r];
+    f = int(frames[r]/4);
     plt.plot(np.log10(A[f,1:L[f]])-mean_amp[f],'g')
-    plt.plot(amp_est[f,1:L[f]],'r')
+    plt.plot(-1+amp_est[f,1:L[f]],'r')
+    plt.plot(-2+np.log10(A_conventional[f,1:L[f]])-mean_amp[f],'b')
     t = "frame %d" % (f)
     plt.title(t)
+    print(error[f],errorc[f])
+plt.show(block=False)
+
+plt.figure(3)
+plt.title('Time Domain')
+for r in range(nb_plots):
+    plt.subplot(nb_plotsy,nb_plotsx,r+1)
+    f = int(frames[r]/4);
+    s = sample_time(f, A[f,:])
+    A_est = 10**(amp_est[f,:] + mean_amp[f])
+    s_est = sample_time(f, A_est)
+    plt.plot(range(-N,N),s,'g')
+    plt.plot(range(-N,N),s_est,'r') 
+plt.show(block=False)
+
+plt.figure(4)
+plt.title('Histogram of mean error squared per frame')
+plt.subplot(211)
+plt.hist(error,20, range=(0,0.15))
+plt.subplot(212)
+plt.hist(errorc,20, range=(0,0.15))
+plt.show(block=False)
+
+plt.figure(5)
+plt.title('error squared against frame energy')
+plt.subplot(211)
+plt.scatter(mean_amp, error)
+plt.subplot(212)
+plt.scatter(mean_amp, errorc)
+plt.show(block=False)
+
+plt.figure(6)
+plt.subplot(211)
+plt.plot(error[:300])
+plt.subplot(212)
+plt.plot(errorc[:300])
 plt.show(block=False)
 
 print("Click on last figure to finish....")
