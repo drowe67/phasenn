@@ -3,8 +3,15 @@
 #
 # David Rowe Dec 2019
 #
-# Train a NN to model to interpolate newamp1 rate K vectors from
-# decimated vectors.
+# Experiments in interpolating rate K vectors using NN's and other
+# techniques.
+
+'''
+  Usage:
+
+  $ c2sim ~/Downloads/train_8k.sw --rateK --rateKout ~/phasenn/rateK.f32
+  $ ./rateK_train.py rateK.f32 --dec 4 --frame 30 --epochs 25
+'''
 
 import numpy as np
 import sys
@@ -52,6 +59,7 @@ nb_vecs = int(nb_samples/dec)
 inputs  = np.zeros((nb_vecs, 2*newamp1_K))
 outputs = np.zeros((nb_vecs, 3*newamp1_K))
 outputs_lin = np.zeros((nb_vecs, 3*newamp1_K))
+outputs_linpf = np.zeros((nb_vecs, 3*newamp1_K))
 nv = 0
 for i in range(0,nb_samples-dec,dec):
     inputs[nv,:newamp1_K] = rateK[i,:]
@@ -65,55 +73,83 @@ for i in range(0,nb_samples-dec,dec):
         st = j*newamp1_K
         outputs_lin[nv,st:st+newamp1_K] = (1-c)*inputs[nv,:newamp1_K] + c*inputs[nv,newamp1_K:]
         c += inc
+    # linear interpolation with per frame selection of c
+    for j in range(dec-1):
+        A = inputs[nv,:newamp1_K]; B = inputs[nv,newamp1_K:];
+        T = rateK[i+1+j,:]
+        c = -np.dot((B-T),(A-B))/np.dot((A-B),(A-B))
+        st = j*newamp1_K
+        outputs_linpf[nv,st:st+newamp1_K] = c*A + (1-c)*B
+    
     nv += 1
 print(inputs.shape, outputs.shape)
 
-# our model
-model = models.Sequential()
-model.add(layers.Dense(3*newamp1_K, activation='relu', input_dim=2*newamp1_K))
-model.add(layers.Dense(3*newamp1_K, activation='relu'))
-model.add(layers.Dense(3*newamp1_K))
-model.summary()
+nn = 0
+if nn:
+    # our model
+    model = models.Sequential()
+    model.add(layers.Dense(3*newamp1_K, input_dim=2*newamp1_K))
+    #model.add(layers.Dense(3*newamp1_K, activation='relu', input_dim=2*newamp1_K))
+    #model.add(layers.Dense(3*newamp1_K, activation='relu'))
+    #model.add(layers.Dense(3*newamp1_K))
+    model.summary()
 
-# fit the model
-from keras import optimizers
-sgd = optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-model.compile(loss='mse', optimizer=sgd)
-history = model.fit(inputs, outputs, batch_size=nb_batch, epochs=args.epochs, validation_split=0.1)
+    # fit the model
+    from keras import optimizers
+    sgd = optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(loss='mse', optimizer=sgd)
+    history = model.fit(inputs, outputs, batch_size=nb_batch, epochs=args.epochs, validation_split=0.1)
 
-# test the model on the traring data
-outputs_est = model.predict(inputs)
+    # test the model on the training data
+    outputs_nnest = model.predict(inputs)
 
-# plot results
+    plt.figure(1)
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.legend(['train', 'valid'], loc='upper right')
+    plt.title('model loss')
+    plt.xlabel('epoch')
+    plt.show(block=False)
+
+# plot results over all frames
+var_lin = np.var(20*outputs-20*outputs_lin)
+var_linpf = np.var(20*outputs-20*outputs_linpf)
+print("var_lin: %3.2f var_linpf: %3.2f" % (var_lin, var_linpf))
+
+# plot results for a few frames
 
 nb_plots = dec+1; nb_plotsy = 1; nb_plotsx = nb_plots
 frame = int(args.frame/dec)
 
-plt.figure(1)
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.legend(['train', 'valid'], loc='upper right')
-plt.title('model loss')
-plt.xlabel('epoch')
-plt.show(block=False)
-
 plt.figure(2)
-plt.title('rate K Amplitude Spectra')
-for d in range(dec+1):
-    plt.subplot(1, nb_plots, d+1)
-    if d == 0:
-        plt.plot(inputs[frame,:newamp1_K],'g')
-    elif d == dec:
-        plt.plot(inputs[frame,newamp1_K:],'g')
-    else: 
-        st = (d-1)*newamp1_K
-        plt.plot(outputs[frame,st:st+newamp1_K],'g')
-        plt.plot(outputs_est[frame,st:st+newamp1_K],'r')
-        plt.plot(outputs_lin[frame,st:st+newamp1_K],'b')
-    plt.ylim((0,4))
-       
-plt.show(block=False)
 
-print("Click on last figure to finish....")
-plt.waitforbuttonpress(0)
-plt.close()
+loop = True
+print("Press key to advance, mouse click on last figure to finish....")
+while loop:
+    plt.title('rate K Amplitude Spectra')
+    for d in range(dec+1):
+        plt.subplot(1, nb_plots, d+1)
+        if d == 0:
+            plt.plot(inputs[frame,:newamp1_K],'g')
+        elif d == dec:
+            plt.plot(inputs[frame,newamp1_K:],'g')
+        else: 
+            st = (d-1)*newamp1_K
+            plt.plot(outputs[frame,st:st+newamp1_K],'g')
+            plt.plot(outputs_lin[frame,st:st+newamp1_K],'b')
+            plt.plot(outputs_linpf[frame,st:st+newamp1_K],'r')
+            if nn:
+                plt.plot(outputs_nnest[frame,st:st+newamp1_K],'r')
+        plt.ylim((-1,4))
+    var_lin = np.var(20*outputs[frame,:]-20*outputs_lin[frame,:])
+    var_linpf = np.var(20*outputs[frame,:]-20*outputs_linpf[frame,:])
+    print("frame: %d var_lin: %3.2f var_linpf: %3.2f" % (frame,var_lin, var_linpf), end='')
+    if nn:
+        var_nnest = np.var(20*outputs[frame,:]-20*outputs_est[frame,:])
+        print("var_nn-est: %3.2f" % (var_nnest))
+    print(flush=True)
+    plt.show(block=False)
+
+    loop = plt.waitforbuttonpress(0)
+    frame += 1
+    plt.clf()
