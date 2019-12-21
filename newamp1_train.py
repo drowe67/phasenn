@@ -6,6 +6,10 @@
 # Train a NN to model to transform newamp1 rate K vectors to rate L
 # {Am} samples.  See if we can get better speech quality than regular
 # DSP algorithms.  Effectively an alternate Codec 2 700C decoder
+'''
+  usage: ./src/c2enc 700C ~/Downloads/train_8k.sw /dev/null --mlfeat ~/phasenn/train_8k.f32 ~/phasenn/train_8k.model --eq
+         ./newamp1_train.py train_8k.f32 train_8k.model --epochs 10
+'''
 
 import numpy as np
 import sys
@@ -53,11 +57,12 @@ print("nb_samples: %d voiced %d" % (nb_samples, nb_voiced))
 features = np.fromfile(args.featurefile, dtype='float32')
 nb_features = 1 + newamp1_K + newamp1_K + max_amp
 nb_samples1 = len(features)/nb_features
-print("nb_samples1: %d" % (nb_samples))
+print("nb_samples1: %f" % (nb_samples1))
+print( nb_samples == nb_samples1)
 assert nb_samples == nb_samples1
 features = np.reshape(features, (nb_samples, nb_features))
 print(features.shape)
-rateK = features[:,newamp1_K+1:2*newamp1_K+1]
+rateK = features[:,1:1+newamp1_K]
 print(rateK.shape)
 A_conventional = features[:,2*newamp1_K+1:]
 print(A_conventional.shape)
@@ -155,8 +160,8 @@ for r in range(nb_plots):
     plt.subplot(nb_plotsy,nb_plotsx,r+1)
     f = int(frames[r]/4);
     plt.plot(np.log10(A[f,1:L[f]])-mean_amp[f],'g')
-    plt.plot(-1+amp_est[f,1:L[f]],'r')
-    plt.plot(-2+np.log10(A_conventional[f,1:L[f]])-mean_amp[f],'b')
+    plt.plot(0+amp_est[f,1:L[f]],'r')
+    plt.plot(0+np.log10(A_conventional[f,1:L[f]])-mean_amp[f],'b')
     t = "frame %d" % (f)
     plt.title(t)
     print(error[f],errorc[f])
