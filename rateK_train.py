@@ -84,20 +84,19 @@ for i in range(0,nb_samples-dec,dec):
     nv += 1
 print(inputs.shape, outputs.shape)
 
-nn = 0
+nn = 1
 if nn:
     # our model
     model = models.Sequential()
-    model.add(layers.Dense(3*newamp1_K, input_dim=2*newamp1_K))
-    #model.add(layers.Dense(3*newamp1_K, activation='relu', input_dim=2*newamp1_K))
-    #model.add(layers.Dense(3*newamp1_K, activation='relu'))
-    #model.add(layers.Dense(3*newamp1_K))
+    model.add(layers.Dense(3*newamp1_K, activation='tanh', input_dim=2*newamp1_K))
+    model.add(layers.Dense(3*newamp1_K, activation='tanh'))
+    model.add(layers.Dense(3*newamp1_K))
     model.summary()
 
     # fit the model
     from keras import optimizers
-    sgd = optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-    model.compile(loss='mse', optimizer=sgd)
+    #sgd = optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(loss='mse', optimizer="adam")
     history = model.fit(inputs, outputs, batch_size=nb_batch, epochs=args.epochs, validation_split=0.1)
 
     # test the model on the training data
@@ -114,7 +113,8 @@ if nn:
 # plot results over all frames
 var_lin = np.var(20*outputs-20*outputs_lin)
 var_linpf = np.var(20*outputs-20*outputs_linpf)
-print("var_lin: %3.2f var_linpf: %3.2f" % (var_lin, var_linpf))
+var_nnest = np.var(20*outputs-20*outputs_nnest)
+print("var_lin: %3.2f var_linpf: %3.2f var_nnest: %3.2f" % (var_lin, var_linpf, var_nnest))
 
 # plot results for a few frames
 
@@ -137,16 +137,20 @@ while loop:
             st = (d-1)*newamp1_K
             plt.plot(outputs[frame,st:st+newamp1_K],'g')
             plt.plot(outputs_lin[frame,st:st+newamp1_K],'b')
-            plt.plot(outputs_linpf[frame,st:st+newamp1_K],'r')
             if nn:
                 plt.plot(outputs_nnest[frame,st:st+newamp1_K],'r')
+            else:
+                plt.plot(outputs_linpf[frame,st:st+newamp1_K],'r')
         plt.ylim((-1,4))
     var_lin = np.var(20*outputs[frame,:]-20*outputs_lin[frame,:])
     var_linpf = np.var(20*outputs[frame,:]-20*outputs_linpf[frame,:])
-    print("frame: %d var_lin: %3.2f var_linpf: %3.2f" % (frame,var_lin, var_linpf), end='')
+    print("frame: %d var_lin: %3.2f " % (frame,var_lin), end='')
     if nn:
-        var_nnest = np.var(20*outputs[frame,:]-20*outputs_est[frame,:])
-        print("var_nn-est: %3.2f" % (var_nnest))
+        var_nnest = np.var(20*outputs[frame,:]-20*outputs_nnest[frame,:])
+        print("var_nnest: %3.2f" % (var_nnest), end='')
+    else:
+        print("var_linpf: %3.2f" % (var_linpf), end='')
+        
     print(flush=True)
     plt.show(block=False)
 
