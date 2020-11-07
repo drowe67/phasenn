@@ -33,7 +33,7 @@ Quality similar to DSP based techniques (e.g. Hilbert Transforms, sampling LPC f
 
 ## Example
 
-Here is the output from [phasenn_test11.py](phasenn_test11.py).  The first plot is a series of (log) magnitude spectra of simulated speech frames.  The voiced frames have two fairly sharp peaks (formants) beneath Fs/2 with structured phase consisting of linear and dispersive terms.  Unvoiced frames have less sharp peaks above Fs/2, and random phases.
+Here is the output from [phasenn_test11.py](phasenn_test11.py).  The first plot is a series of (log) magnitude spectra of **simulated** speech frames.  The voiced frames have two fairly sharp peaks (formants) beneath Fs/2 with structured phase consisting of linear and dispersive terms.  Unvoiced frames have less sharp peaks above Fs/2, and random phases.
 
 ![](example_mag.png "Magnitude Spectra")
 ![](example_phase.png "Phase Spectra")
@@ -47,5 +47,7 @@ For unvoiced speech, we want the NN output (blue) to be random.  They do not nee
 ## References
 
 [1] Wang et al, "Neural Harmonic-plus-Noise Waveform Model with Trainable Maximum Voice Frequency for Text-to-Speech Synthesis", 2019
+
 [2] Engel et all, "DDSP: DIFFERENTIABLE DIGITAL SIGNAL PROCESSING", 2020
+
 [3] Liu et al, "Neural Homomorphic Vocoder", 2020
