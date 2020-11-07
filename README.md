@@ -1,6 +1,6 @@
 # PhaseNN
 
-A project to model sinusoidal codec phase spectra with neural nets.
+Modelling sinusoidal codec phase spectra with neural nets.
 
 ## Introduction
 
@@ -12,10 +12,19 @@ The trade off is that sinusoidal models tend to have some baseline artefacts, so
 
 Sinusoidal codecs require a suitable set of the sinusoidal harmonic phases for each frame that is synthesised. This work aims to generate the sinusoid phases from amplitude information using NNs, in order to develop a block based NN synthesis engine based on sinusoidal coding.
 
+## Literature Review (November 2020)
+
+Since I started this work in August 2019, several papers have appeared with teams using sinusoidal speech production models with Neural Nets [1][2][3]:
+1. They use mixed harmonic sinusoid plus noise.
+1. When trained on a single female speaker, high speech quality is obtained.  However so far it seems limit to single speakers, which is OK for "copy synthesis", but not codecs where speaker Independence is important.  Also males are much more sensitive to phase.
+1. They use NN to train DSP components such as filters - similar to the phase NN work her, where I am using a freq domain all pass filter to model phase.
+1. Low CPU complexity using feed forward/block based/freq domain rather than autoregressive NNs.
+1. In some cases F0 (pitch) is also estimated using NNs.
+
 ## Status (Dec 2019)
 
-Sucessful synthesis of sinusoidal phases for voiced speech using NNs.
-Quality similar to DSP based techniques (e.g. Hilbert Trasforms, sampling LPC filter phase).
+Successful synthesis of sinusoidal phases for voiced speech using NNs.
+Quality similar to DSP based techniques (e.g. Hilbert Transforms, sampling LPC filter phase).
 
 ## Challenges
 
@@ -35,20 +44,8 @@ When training from real world data, we have frames of phase spectra with the lin
 
 For unvoiced speech, we want the NN output (blue) to be random.  They do not need to match the original input phase spectra. The NN appears to preserve this random phase structure in this simulation.  This may remove the need for a voicing estimate - voicing can be deduced from the magnitude spectra.
 
-## Running on Real Speech
+## References
 
-```
-./train.sh ~/Downloads/train_8k.sw
-./synth.sh ~/Downloads/train_8k.sw phasenn_model.h5 60 2.5
-scp deep.lan:phasenn/train_8k_all.sw /dev/stdout | aplay -f S16_LE
-```
-Four samples
-
-TODO:
-briefly summarise Status, UV model, phase0, significance, codec 2 baseline artefacts
-some plots with real speech
-train file up in web server and link
-some samples to listen too
-link from blog post
-Further work
-spell check
+[1] Wang et al, "Neural Harmonic-plus-Noise Waveform Model with Trainable Maximum Voice Frequency for Text-to-Speech Synthesis", 2019
+[2] Engel et all, "DDSP: DIFFERENTIABLE DIGITAL SIGNAL PROCESSING", 2020
+[3] Liu et al, "Neural Homomorphic Vocoder", 2020

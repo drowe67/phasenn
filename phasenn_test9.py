@@ -10,12 +10,12 @@
 
 import numpy as np
 import sys
-from keras.layers import Dense
-from keras import models,layers
-from keras import initializers
 import matplotlib.pyplot as plt
 from scipy import signal
-from keras import backend as K
+from tensorflow import keras
+
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Dense
 
 # constants
 
@@ -79,14 +79,13 @@ for i in range(nb_samples):
         # target is n0 in rec coords                      
         target[i] = n0[i]/P_max
         
-model = models.Sequential()
-model.add(layers.Dense(pairs, activation='relu', input_dim=pairs))
-model.add(layers.Dense(128, activation='relu'))
-model.add(layers.Dense(1))
+model = Sequential()
+model.add(Dense(pairs, activation='relu', input_dim=pairs))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(1))
 model.summary()
 
-from keras import optimizers
-sgd = optimizers.SGD(lr=0.08, decay=1e-6, momentum=0.9, nesterov=True)
+sgd = keras.optimizers.SGD(lr=0.08, decay=1e-6, momentum=0.9, nesterov=True)
 model.compile(loss="mse", optimizer=sgd)
 history = model.fit(phase_rect, target, batch_size=nb_batch, epochs=nb_epochs)
 
