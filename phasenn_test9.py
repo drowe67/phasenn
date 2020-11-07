@@ -12,8 +12,8 @@ import numpy as np
 import sys
 import matplotlib.pyplot as plt
 from scipy import signal
-from tensorflow import keras
 
+from tensorflow import keras
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense
 
